@@ -26,7 +26,6 @@ static_assert (ErrorInstruction <= 8, "Too many instruction");
 
 const int ACTION_NONE = 255;
 
-
 struct ServoActionData;
 struct OutputActionData;
 struct WaitActionData;
@@ -47,9 +46,8 @@ const byte servoSpeedTimes[] = {
    Initializes at 90deg. Values are packed/remembered in 6deg steps.
    Servo speed is remembered in 100ms units
 */
-const byte servoPwmStep = 3;
-
 struct ServoConfig {
+  static const byte servoPwmStep = 3;
   /**
      Left/first position, in servoPwmStep = 3 deg increments
   */
@@ -68,11 +66,13 @@ struct ServoConfig {
   /**
    * Ouptut which will signal servos' position.
    */
-  byte  statusOutput : 5;
+  byte  statusOutput : 6;
 
-  // 6 + 6 + 3 + 5 = 20 bits
+  // 6 + 6 + 3 + 6 = 21 bits
   // 24 bits limit
 
+  // the default is chosen so that it positions the servo at neutral position. 0 would mean to position at
+  // one of the edge positions, which is not usually good for servos already built into a structure.
   ServoConfig() : pwmFirst((90 / servoPwmStep)), pwmSecond((90 / servoPwmStep)), servoSpeed(0), statusOutput(0) {
   }
 
@@ -153,7 +153,15 @@ struct ServoConfig {
     s.concat(':');
     s.concat(servoSpeed + 1);
   }
+
+  // load data from EEPROM
+  void load(int idx);
+  // save into EEPROM
+  void save(int idx);
 };
+
+extern ServoConfig  setupServoConfig;
+extern int setupServoIndex;
 
 typedef void (*ActionRenumberFunc)(int, int);
 
@@ -705,14 +713,17 @@ void NumberInput::set(NumberInput * input) {
   numberInput = input;
 }
 
-const int eeaddr_servoConfig = 0x00;
+const int CURRENT_DATA_VERSION = 0x04;
+
+const int eeaddr_version = 0x00;
+const int eeaddr_servoConfig = 0x02;
 
  // servo positions, min 16 servos
-const int eeaddr_servoPositions = 0x33;
+const int eeaddr_servoPositions = 0x35;
 static_assert (eeaddr_servoPositions >= eeaddr_servoConfig + 2 + MAX_SERVO * sizeof(ServoConfig), "EEPROM data overflow");
  
 // configuration for max 128 actions
-const int eeaddr_actionTable = 0x4c;
+const int eeaddr_actionTable = 0x4e;
 static_assert (eeaddr_actionTable >= eeaddr_servoPositions + 2 + MAX_SERVO * sizeof(byte), "EEPROM data overflow");
  
 const int eeaddr_commandTable = (eeaddr_actionTable + sizeof(Action::actionTable)) + 2;

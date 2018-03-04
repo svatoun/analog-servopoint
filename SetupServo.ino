@@ -1,6 +1,9 @@
+
+ServoConfig setupServoConfig;
+
 const int showSelectedServoTime = 2000;
 
-int servoIndex = -1;
+int setupServoIndex = -1;
 
 const int blinkServo[] = { 250, 250, 1000, 250, 0 };
 
@@ -44,9 +47,9 @@ class InputServoSpeed : public NumberInput {
 
 int InputServoPos::getValue() {
   if (left) {
-    return servoConfig[servoIndex].left();
+    return setupServoConfig.left();
   } else {
-    return servoConfig[servoIndex].right();
+    return setupServoConfig.right();
   }
 }
 
@@ -61,14 +64,14 @@ int InputServoPos::incValue(int v, int inc) {
 void InputServoPos::finished(int value) {
   if (left) {
     Serial.print(F("Set left position to: ")); Serial.println(value);
-    servoConfig[servoIndex].setLeft(value);
+    setupServoConfig.setLeft(value);
     NumberInput::set(new InputServoPos(false));
     setupState = servoSetRight;
     numberInput->display();
     Serial.print(F("Right pos = ")); Serial.println(numberInput->getValue());
   } else {
     Serial.print(F("Set right position to: ")); Serial.println(value);
-    servoConfig[servoIndex].setRight(value);
+    setupServoConfig.setRight(value);
     setupState = servoSetSpeed;
     NumberInput::set(new InputServoSpeed());
     Serial.print(F("Speed = ")); Serial.println(numberInput->getValue());
@@ -76,7 +79,7 @@ void InputServoPos::finished(int value) {
 }
 
 void InputServoNumber::finished(int value) {
-    if (value > MAX_SERVO) {
+    if (value == 0 || value > MAX_SERVO) {
       enterSetup();
       return;
     }
@@ -84,8 +87,8 @@ void InputServoNumber::finished(int value) {
 }
 
 void startSetupServo(int value) {
-    servoIndex = value;
-    Serial.print(F("Configuring servo ")); Serial.println(servoIndex);
+    setupServoIndex = value;
+    Serial.print(F("Configuring servo ")); Serial.println(setupServoIndex);
     setupState = servoSetLeft;
     NumberInput::set(new InputServoPos(true));
     numberInput->display();
@@ -98,21 +101,22 @@ void InputServoPos::displayCurrent(int typed, int selectedPos) {
   }
   clearNewCommand();
   Action a1;
-  a1.asServoAction().move(servoIndex, selectedPos);
+  a1.asServoAction().move(setupServoIndex, selectedPos);
   Serial.print(F("Action data: ")); Serial.println(a1.data);
   addNewCommand(a1);
   executor.playNewAction();
 }
 
 int InputServoSpeed::getValue() {
-  return servoConfig[servoIndex].speed();
+  return setupServoConfig.speed();
 }
 
 void InputServoSpeed::finished(int v) {
   Serial.print(F("Setting speed ")); Serial.println(v);
-  servoConfig[servoIndex].setSpeed(v - 1);
+  setupServoConfig.setSpeed(v - 1);
   overrideSpeed = -1;
   // Persist in EEPROM
+  setupServoConfig.save(setupServoIndex);
   servoEEWriteSetup();
   enterSetup();
 }
@@ -128,10 +132,10 @@ void InputServoSpeed::displayCurrent(int typed, int n) {
 
   Action  a;
   ServoActionData& sad = a.asServoAction();
-  sad.moveLeft(servoIndex);
+  sad.moveLeft(setupServoIndex);
   addNewCommand(a);
 
-  sad.moveRight(servoIndex);
+  sad.moveRight(setupServoIndex);
   addNewCommand(a);
   executor.playNewAction();
 }
@@ -141,7 +145,7 @@ void InputServoSpeed::showIdle(int n) {
 }
 
 void enterSetupServo0() {
-    servoIndex = -1;
+    setupServoIndex = -1;
     adjustCallback = NULL;
     setupState = servoSelect;
     NumberInput::set(new InputServoNumber());
@@ -149,7 +153,7 @@ void enterSetupServo0() {
 
 void enterSetupServo() {
     // read EEPROM into the servo config
-    eeBlockRead('S', eeaddr_servoConfig, &servoConfig[0], sizeof(servoConfig));
+//    eeBlockRead('S', eeaddr_servoConfig, &servoConfig[0], sizeof(servoConfig));
     if (debugControl) {
       Serial.print(F("Entering servo setup"));
     }
@@ -302,7 +306,7 @@ void NumberInput::handleIdle() {
 }
 
 void waveSelectedServo() {
-  waveSelectedServo(servoIndex);
+  waveSelectedServo(setupServoIndex);
 }
 
 void waveSelectedServo(int servoId) {
@@ -358,7 +362,10 @@ void rangeCommand(String& l) {
   }
   index--;
 
-  int spd = servoConfig[index].speed();
+  ServoConfig tmpConfig;
+
+  tmpConfig.load(index);
+  int spd = tmpConfig.speed();
   if (l.length() > 0) {
     spd = nextNumber(l);
     if (spd < 1 || spd > 8) {
@@ -367,13 +374,13 @@ void rangeCommand(String& l) {
     }
     spd--;
   }
-  servoConfig[index].setLeft(left);
-  servoConfig[index].setRight(right);
-  servoConfig[index].setSpeed(spd);
+  tmpConfig.setLeft(left);
+  tmpConfig.setRight(right);
+  tmpConfig.setSpeed(spd);
   String s;
-  servoConfig[index].print(index, s);
+  tmpConfig.print(index, s);
   Serial.println(s);
-
+  tmpConfig.save(index);
   Serial.println(F("\nOK"));
 }
 

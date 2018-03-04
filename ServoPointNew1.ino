@@ -19,11 +19,6 @@ ModuleChain* ModuleChain::head;
 
 byte state[(maxId + 7) / 8];
 
-/**
-   Servo predefined positions.
-*/
-ServoConfig servoConfig[MAX_SERVO];
-
 Command commands[MAX_COMMANDS];
 
 
@@ -173,6 +168,8 @@ void stopAll() {
 void servoSetup();
 
 void initializeHW() {
+  keypad.digitalPins(A5);
+  
   //  Serial.begin(115200);
   Serial.begin(57600);
   // put your setup code here, to run once:
@@ -182,26 +179,38 @@ void initializeHW() {
   //  servoSetup();
 }
 
+void checkInitEEPROM() {
+  int savedVer = EEPROM.read(eeaddr_version);
+  if (savedVer == CURRENT_DATA_VERSION) {
+    return;
+  }
+  Serial.println(F("Obsolete or missing data in EEPROM, reinitializing"));
+  ModuleChain::invokeAll(ModuleCmd::reset);
+  ModuleChain::invokeAll(ModuleCmd::eepromSave);
+  EEPROM.write(eeaddr_version, CURRENT_DATA_VERSION);
+}
 
 void setup() {
   initializeHW();
+  checkInitEEPROM();
+
   ModuleChain::invokeAll(ModuleCmd::initialize);
+  
   //  initializeTables();
   for (int i = 0; i < sizeof(state); i++) {
     state[i] = 0;
   }
-
 
   // initial load of key / switch positions
   keypad.getKeys();
   keypad.addChangeListener(&processKeyCallback);
 //  enterSetup();
 
-  int dataSize = sizeof(servoConfig) + sizeof(commands);
+  int dataSize = 0; // sizeof(servoConfig) + sizeof(commands);
   dataSize += sizeof(Executor) + sizeof(ServoProcessor);
   dataSize += sizeof(Action::actionTable);
 
-  Serial.print(F("Size of servoConfig: ")); Serial.println(sizeof(servoConfig));
+//  Serial.print(F("Size of servoConfig: ")); Serial.println(sizeof(servoConfig));
   Serial.print(F("Size of commands: ")); Serial.println(sizeof(commands));
   Serial.print(F("Size of executors: ")); Serial.println(sizeof(Executor) + sizeof(ServoProcessor));
   Serial.print(F("Size of actions: ")); Serial.println(sizeof(Action::actionTable));

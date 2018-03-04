@@ -46,6 +46,8 @@ void resetState() {
  */
 void enterSetup() {
   setupState = initialMenu;
+  setupServoConfig.clear();
+  setupServoIndex = -1;
   if (charModeCallback != NULL) {
     // setup was invoked from terminal; reset terminal and disable setup
     setupActive = false;

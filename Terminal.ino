@@ -25,6 +25,7 @@ void setupTerminal() {
   registerLineCommand("CLR", &commandClear);
   registerLineCommand("INF", &commandStatus);
   registerLineCommand("EXE", &commandExecute);
+  registerLineCommand("EED", &commandDumpEEProm);
   resetTerminal();
 }
 
@@ -347,4 +348,27 @@ void commandExecute(String& s) {
   
 }
 
+void commandDumpEEProm(String& s) {
+  Serial.println("EEPROM Dump:");
+  String line;
+  line.reserve(8 * 3 + 4);
+  int cnt = 0;
+  for (int eea = 0; eea < eeaddr_top; eea++) {
+    int r = EEPROM.read(eea);
+    if (r < 0x10) {
+      line.concat('0');
+    }
+    line.concat(String(r, HEX)); line.concat(' ');
+    cnt++;
+    if (cnt %32 == 0) {
+      Serial.println(line);
+      line = "";
+    } else if (cnt % 8 == 0) {
+      Serial.print(line);
+      line = "";
+      Serial.print(F("- "));
+    }
+  }
+  Serial.println(line);
+}
 

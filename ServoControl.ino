@@ -2,6 +2,10 @@
 ///////////////////////////// Servo Movement //////////////////////////////
 ServoProcessor  processors[2];  
 
+/**
+   Servo predefined positions.
+*/
+
 ModuleChain servoModule("Servo", 0, &servoModuleHandler);
 
 byte  servoPositions[MAX_SERVO]; 
@@ -52,19 +56,23 @@ void printServoAction(const Action& a, String& s) {
 
 void servoDump() {
   String s;
-  for (int i = 0; i < sizeof(servoConfig) / sizeof(servoConfig[0]); i++) {
-    if (servoConfig[i].isEmpty()) {
+  ServoConfig tmp;
+  for (int i = 0; i < MAX_SERVO; i++) {
+    tmp.load(i);
+    if (tmp.isEmpty()) {
       continue;
     }
     s = "";
-    servoConfig[i].print(i + 1, s);
+    tmp.print(i + 1, s);
     Serial.println(s);
   }
 }
 
 void servoClear() {
   for (int i = 0; i < MAX_SERVO; i++) {
-    servoConfig[i].clear();
+    ServoConfig tmp;
+    tmp.clear();
+    tmp.save(i);
   }
   for (int i = 0; i < sizeof(servoPositions) / sizeof(servoPositions[0]); i++) {
     servoPositions[i] = 90;
@@ -74,7 +82,9 @@ void servoClear() {
 void servoStatus() {
   int srvCount = 0;
   for (int i = 0; i < MAX_SERVO; i++) {
-    if (servoConfig[i].isEmpty()) {
+    ServoConfig tmp;
+    tmp.load(i);
+    if (tmp.isEmpty()) {
       continue;
     }
     srvCount++;
@@ -114,8 +124,16 @@ void servoModuleHandler(ModuleCmd cmd) {
 }
 
 void servoEepromLoad() {
-  eeBlockRead('S', eeaddr_servoConfig, &servoConfig[0], sizeof(servoConfig));
+//  eeBlockRead('S', eeaddr_servoConfig, &servoConfig[0], sizeof(servoConfig));
   eeBlockRead('P', eeaddr_servoPositions, &servoPositions[0], sizeof(servoPositions));
+}
+
+void ServoConfig::load(int idx) {
+  EEPROM.get(eeaddr_servoConfig + idx * sizeof(ServoConfig), *this);
+}
+
+void ServoConfig::save(int idx) {
+  EEPROM.put(eeaddr_servoConfig + idx * sizeof(ServoConfig), *this);
 }
 
 void startServos1To8() {
@@ -181,7 +199,7 @@ void startServos1To8() {
 }
 
 void servoEEWriteSetup() {
-  eeBlockWrite('S', eeaddr_servoConfig, &servoConfig[0], sizeof(servoConfig));
+//  eeBlockWrite('S', eeaddr_servoConfig, &servoConfig[0], sizeof(servoConfig));
   servoEEWrite();
 }
 
@@ -313,7 +331,13 @@ Processor::R ServoProcessor::processAction(const Action& action, int handle) {
       return ignored;
     }
   }
-  const ServoConfig& cfg = servoConfig[s];
+  ServoConfig cfg;
+  if (s == setupServoIndex) {
+    cfg = setupServoConfig;  
+  } else {
+    cfg.load(s);
+  }
+  
   int target;
   if (data.isPredefinedPosition()) {
     target = data.isLeft() ? cfg.left() : cfg.right();
@@ -334,7 +358,7 @@ Processor::R ServoProcessor::processAction(const Action& action, int handle) {
   actionIndex = handle;
   targetAngle = target;
   prevMillis = currentMillis;
-  servoSpeed = overrideSpeed == -1 ? servoConfig[s].speed() : overrideSpeed;
+  servoSpeed = overrideSpeed == -1 ? cfg.speed() : overrideSpeed;
   if (debugServo) {
     Serial.print(F("Speed ")); Serial.print(servoSpeed); Serial.print(F(", millis = ")); Serial.print(servoSpeedTimes[servoSpeed]);
   }
