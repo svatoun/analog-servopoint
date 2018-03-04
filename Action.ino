@@ -1,7 +1,8 @@
 
+
 Action  Action::actionTable[MAX_ACTIONS];
 ActionRenumberFunc Action::renumberCallbacks[5];
-dumper_t Action::dumpers[16];
+dumper_t Action::dumpers[] = { NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL };
 
 int Action::top = 0;
 
@@ -18,7 +19,7 @@ void Action::registerDumper(Instr cmd, dumper_t dumper) {
 void Action::print(String& s) {
   dumper_t d = dumpers[command];
   if (d == NULL) {
-    s += "UNK" + command;
+    s.concat(F("UNK:")); s.concat(command); s.concat(F(":")); s.concat(String(data, HEX));
   } else {
     d(*this, s);
   }

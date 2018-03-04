@@ -14,15 +14,15 @@ char pressedKey;
 
 enum Instr {
   none = 0,
-  servoPredef,  // 1  control a servo
-  servoPos,     // 2  specific position of a servo
+  servo,         // 1  control a servo
   wait,         // 3  wait before executing next command
   onOff,        // 4  turn the output on and off
-  pulse,        // 5  pulse the output
   cancel,       // 6  cancel pending action
-  flash,        // 7  flash in some frequency,
-  skipIf        // skip if condition (not) met
+  control,
+  continuation,
+  ErrorInstruction
 };
+static_assert (ErrorInstruction <= 8, "Too many instruction");
 
 const int ACTION_NONE = 255;
 
@@ -47,7 +47,7 @@ const byte servoSpeedTimes[] = {
    Initializes at 90deg. Values are packed/remembered in 6deg steps.
    Servo speed is remembered in 100ms units
 */
-const int servoPwmStep = 3;
+const byte servoPwmStep = 3;
 
 struct ServoConfig {
   /**
@@ -65,11 +65,19 @@ struct ServoConfig {
   */
   byte  servoSpeed : 3;
 
-  ServoConfig() : pwmFirst(90), pwmSecond(90), servoSpeed(0) {
+  /**
+   * Ouptut which will signal servos' position.
+   */
+  byte  statusOutput : 5;
+
+  // 6 + 6 + 3 + 5 = 20 bits
+  // 24 bits limit
+
+  ServoConfig() : pwmFirst((90 / servoPwmStep)), pwmSecond((90 / servoPwmStep)), servoSpeed(0), statusOutput(0) {
   }
 
   boolean isEmpty() {
-    return (pwmFirst == 90) && (pwmSecond == 90) && (servoSpeed == 0);
+    return (pwmFirst == (90 / servoPwmStep)) && (pwmSecond == (90 / servoPwmStep)) && (servoSpeed == 0);
   }
 
   void setLeft(int l) {
@@ -130,12 +138,13 @@ struct ServoConfig {
   }
 
   void clear() {
-    pwmFirst = pwmSecond = 0;
+    pwmFirst = pwmSecond = (90 / servoPwmStep);
     servoSpeed = 0;
+    statusOutput = 0;
   }
 
   void print(int id, String& s) {
-    s.concat("RNG:");
+    s.concat(F("RNG:"));
     s.concat(id);
     s.concat(':');
     s.concat(left());
@@ -156,9 +165,9 @@ typedef void (*dumper_t)(const Action& , String&);
 
 struct Action {
     byte  last    :   1;    // flag, last action
-    byte  command :   4;    // instruction
+    byte  command :   3;    // instruction
 
-    unsigned int data : 11; // action type-specific data
+    unsigned int data : 12; // action type-specific data
 
     static Action actionTable[MAX_ACTIONS];
     static ActionRenumberFunc renumberCallbacks[];
@@ -174,6 +183,8 @@ struct Action {
     static void renumberCallback(ActionRenumberFunc f);
 
     static Action* get(int index);
+
+    static boolean isPersistent(const Action* a) { return (a > actionTable) && (a < (actionTable + MAX_ACTIONS)); }
     
     void makeLast() {
       last = 1;
@@ -215,36 +226,41 @@ struct Action {
     void print(String& s);
 };
 
-const int servoPredefinedLeft   = 0;
-const int servoPredefinedRight  = 1;
-
 struct ServoActionData {
+  // must not use const-int, as it allocates memory and the structure must fit
+  // into Action allocation
+  enum SpecialPositions {
+    servoPredefinedLeft   = 0,
+    servoPredefinedRight  = 1,
+    servoCustomStart = 2
+  };
+  
   byte  last    :   1;    // flag, last action
-  byte  command :   4;    // instruction
+  byte  command :   3;    // instruction
 
-  byte  servoIndex : 5;     // up to 32 servos
+  byte  servoIndex : 4;     // up to 32 servos
   byte  targetPos  : 6;     // 0..180, in 3deg increments
 
   void moveLeft(int s) {
-    command = servoPredef;
+    command = servo;
     servoIndex = s;
     setTargetPosition(true);
   }
 
   void moveRight(int s) {
-    command = servoPredef;
+    command = servo;
     servoIndex = s;
     setTargetPosition(false);
   }
 
   void move(int s, int angle) {
-    command = servoPos;
+    command = servo;
     servoIndex = s;
     setTargetPosition(angle);
   }
 
   boolean isPredefinedPosition() {
-    return command == servoPredef;
+    return targetPos < servoCustomStart;
   }
 
   boolean isLeft() {
@@ -252,72 +268,95 @@ struct ServoActionData {
   }
 
   int targetPosition() {
-    return (targetPos) * 3;
+    return (targetPos - servoCustomStart) * 3;
   }
 
   void setTargetPosition(boolean left) {
-    command = servoPredef;
+    command = servo;
     targetPos = left ? servoPredefinedLeft : servoPredefinedRight;
   }
 
   void setTargetPosition(int degs) {
-    targetPos = (degs / 3);
+    targetPos = (degs / 3) + servoCustomStart;
   }
 
   void print(String& out) {
+    out.concat(F("MOV:")); 
     if (isPredefinedPosition()) {
-      out.concat("MOV:"); out.concat(servoIndex + 1); out.concat(":");
-      out.concat(isLeft() ? "L" : "R");
+      out.concat(servoIndex + 1); out.concat(':');
+      out.concat(isLeft() ? 'L' : 'R');
     } else {
-      out.concat("MOV:"); out.concat(servoIndex + 1); out.concat(":");
+      out.concat(servoIndex + 1); out.concat(':');
       out.concat(targetPosition());
     }
   }
 };
+// sanity check
+static_assert (sizeof(ServoActionData) <= sizeof(Action), "ServoActionData misaligned");
 
 struct OutputActionData {
     byte  last    :   1;
-    byte  command :   4;
+    byte  command :   3;
 
-    byte  makeOn    : 2;      // true - turn on. False - turn off.
+    enum OutputFunction {
+        outOn, 
+        outOff,
+        outToggle,
+        outPulse,
+
+        outError
+    };
+    OutputFunction  fn : 2;    // output function style
     byte  outputIndex : 5;    // up to 32 outputs
 
   public:
     void  turnOn(int output) {
       command = onOff;
-      makeOn = 1;
+      fn = outOn;
       outputIndex = output;
     }
 
     void turnOff(int output) {
       command = onOff;
-      makeOn = 0;
+      fn = outOff;
       outputIndex = output;
     }
 
     void toggle(int output) {
       command = onOff;
-      makeOn = 2;
+      fn = outToggle;
       outputIndex = output;
     }
 
     boolean isOn();
 
     void print(String& s) {
-      s.concat("OUT:"); s.concat(outputIndex); s.concat(":");
-      switch (makeOn) {
-        case 0: s.concat("H"); break;
-        case 1: s.concat("L"); break;
-        case 2: s.concat("T"); break;
-        default: s.concat("E"); break;
+      s.concat(F("OUT:")); s.concat(outputIndex); s.concat(':');
+      switch (fn) {
+        case outOn: s.concat('H'); break;
+        case outOff: s.concat('L'); break;
+        case outToggle: s.concat('T'); break;
+        default: s.concat('E'); break;
       }
     }
 };
+static_assert (OutputActionData::outError <= 4, "Too many output functions");
+static_assert (sizeof(OutputActionData) <= 2, "Output data too large");
 
+struct  OutputActionPWMData {
+    byte  last    :   1;
+    byte  command :   3;
+    OutputActionData::OutputFunction  fn : 3;    // output function style
+    byte  outputIndex : 5;    // up to 32 outputs
 
+    
+};
+static_assert (sizeof(OutputActionPWMData) <= 2, "Output data too large");
+
+#if 0
 struct PulseActionData {
   byte  last    :   1;
-  byte  command :   4;
+  byte  command :   3;
 
   byte  outputIndex : 5;
   byte  units      : 2;
@@ -354,15 +393,18 @@ struct PulseActionData {
     s.concat("PLS:"); s.concat(outputIndex); s.concat(":"); s.concat(getPulseDelay() * 10);
   }
 };
+#endif
 
 struct WaitActionData {
   byte  last    : 1;
-  byte  command : 4;
+  byte  command : 3;
   
   int   waitTime : 11;
 
   int   computeDelay();
 };
+
+struct ExecutionState;
 
 class Processor {
   public:
@@ -371,27 +413,40 @@ class Processor {
       finished,
       blocked
     };
+    virtual R processAction2(ExecutionState& state) {
+      return ignored;
+    }
     virtual R processAction(const Action& ac, int handle) = 0;
     virtual void tick() {};
     virtual void clear() {}
     virtual boolean cancel(const Action& ac) = 0;
+    virtual R pending(const Action& ac, void* storage) {
+      return ignored;
+    }
 };
 
 struct ExecutionState {
-  int id : 5;
-  boolean blocked : 1;
-  const Action* action;
+  int id : 5;           // command ID ?
+  boolean blocked : 1;  // if the execution is blocked
+  boolean wait : 1;
+  // 1 bits remains
+  
+  const Action* action; // the current executing action
+  Processor* processor;
+
+  byte  data[4];
 
   boolean isAvailable() {
     return !blocked && action == NULL;
   }
 
-  ExecutionState() : id(0), blocked(false), action(NULL) {}
+  ExecutionState() : id(0), blocked(false), action(NULL), processor(NULL) {}
   void clear() {
     blocked = false;
     action = NULL;
   }
 };
+static_assert (sizeof(ExecutionState) < 10, "Execution state too large");
 
 class Executor {
     Processor*  processors[MAX_PROCESSORS];
@@ -429,16 +484,21 @@ class Executor {
 */
 class ServoProcessor : public Processor {
   private:
+    enum {
+        noservo = 0xff,
+        noaction = 0xff
+    };
+
     /**
        Current positions of all servos, for smooth movement
     */
     Servo   ctrl;
     ServoProcessor  *linked;
-    int  servoIndex;
-    int  targetAngle;
+    byte servoIndex;
+    byte targetAngle;
     byte servoSpeed;   // how many milliseconds should the servo command last before changing the angle;
     long prevMillis;
-    int actionIndex;
+    byte actionIndex;
     const Action* blockedAction;
     byte targetPosCounter;
 
@@ -466,7 +526,7 @@ class ServoProcessor : public Processor {
     boolean cancel(const Action& ac) override;
 
     boolean available() {
-      return servoIndex == -1;
+      return servoIndex == noservo;
     }
     boolean isCompatibleWith(int servoIndex);
 };
@@ -493,6 +553,10 @@ class Output {
        Clears the appropriate bit
     */
     void  clear(int outputIndex);
+
+    void  setBit(int outputIndex, boolean value) {
+      if (value) { set(outputIndex); } else { clear(outputIndex); }
+    }
 
     /**
        Sets all bits to zero, immediately. Resets internal state.
@@ -521,6 +585,8 @@ struct Command {
     boolean on :    1;        // flag: act on 1 = pressed, 0 = released
     boolean wait:   1;        // wait on action to finish before next one
     byte    actionIndex :  8; // max 255 actions allowed
+    byte    id :    5;
+    // 8 + 5 + 5 + 2 = 20bits
   public:
     Command() : input(0), actionIndex(0xff), on(false), wait(true) {}
     Command(int aI, boolean aO, boolean aW, int aN) : input(aI), on(aO), wait(aW), actionIndex(aN) {}
@@ -562,9 +628,9 @@ class NumberInput {
     int selectedNumber;
     int typedNumber = -1;
     long lastTypedMillis;
-    boolean shown;
-    boolean wasCancel;
-    byte digitCount;
+    boolean shown : 1;
+    boolean wasCancel : 1;
+    byte digitCount : 3;
   public:
     NumberInput(int aMin, int aMax) : minValue(aMin), maxValue(aMax), selectedNumber(aMin), lastTypedMillis(0), shown(false), wasCancel(false), digitCount(0) {}
 
@@ -674,16 +740,19 @@ void NumberInput::set(NumberInput * input) {
   numberInput = input;
 }
 
-// configuration for 16 servos, padded to 16byte boundary
 const int eeaddr_servoConfig = 0x00;
 
-// servo positions, min 16 servos
-const int eeaddr_servoPositions = 0x28;
-
-// configuration for max 200 actions
-const int eeaddr_actionTable = 0x40;
-
+ // servo positions, min 16 servos
+const int eeaddr_servoPositions = 0x33;
+static_assert (eeaddr_servoPositions >= eeaddr_servoConfig + 2 + MAX_SERVO * sizeof(ServoConfig), "EEPROM data overflow");
+ 
+// configuration for max 128 actions
+const int eeaddr_actionTable = 0x4c;
+static_assert (eeaddr_actionTable >= eeaddr_servoPositions + 2 + MAX_SERVO * sizeof(byte), "EEPROM data overflow");
+ 
 const int eeaddr_commandTable = (eeaddr_actionTable + sizeof(Action::actionTable)) + 2;
+static_assert (eeaddr_commandTable >= eeaddr_actionTable + 2 + MAX_ACTIONS * sizeof(Action), "EEPROM data overflow");
 
-const int eeaddr_top = (eeaddr_commandTable + MAX_COMMANDS * 2) + 2;
+const int eeaddr_top = (eeaddr_commandTable + MAX_COMMANDS * sizeof(Command)) + 2;
+static_assert (eeaddr_top + 70 < 512, "Too large data for EEPROM");
 

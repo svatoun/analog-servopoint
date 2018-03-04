@@ -43,8 +43,7 @@ void servoSetup() {
   registerLineCommand("MOV", &moveCommand);
   registerLineCommand("CAL", &commandCalibrate);
 
-  Action::registerDumper(servoPredef, printServoAction);
-  Action::registerDumper(servoPos, printServoAction);
+  Action::registerDumper(servo, printServoAction);
 }
 
 void printServoAction(const Action& a, String& s) {
@@ -104,7 +103,10 @@ void servoModuleHandler(ModuleCmd cmd) {
       break;
     case status:
       servoStatus();
-      break;  
+      break;
+    case reset:
+      servoClear();
+      break;
     case periodic:
       handleServoMovement();
       break;
@@ -193,7 +195,7 @@ void handleServoMovement() {
   }
 }
 
-ServoProcessor::ServoProcessor() : servoIndex(-1), actionIndex(-1), blockedAction(NULL), servoMask(0)
+ServoProcessor::ServoProcessor() : servoIndex(noservo), actionIndex(noaction), blockedAction(NULL), servoMask(0)
 {
   executor.addProcessor(this);
   clear();
@@ -245,15 +247,15 @@ void ServoProcessor::tick() {
 }
 
 void ServoProcessor::clear() {
-  if (servoIndex == -1) {
+  if (servoIndex == noservo) {
     return;
   }
   if (debugServo) {
     Serial.print(F("Stopping servo ")); Serial.println(servoIndex);
   }
   ctrl.detach();
-  servoIndex = -1;
-  actionIndex = -1;
+  servoIndex = noservo;
+  actionIndex = noaction;
   blockedAction = NULL;
   enable = false;
   targetPosCounter = 0;
@@ -265,7 +267,9 @@ void ServoProcessor::moveFinished() {
   }
   int i = actionIndex;
   executor.finishAction(blockedAction, i);
-  servoEEWrite();
+  if (Action::isPersistent(blockedAction)) {
+    servoEEWrite();
+  }
   clear();
 }
 
@@ -289,7 +293,7 @@ boolean ServoProcessor::cancel(const Action& action) {
 }
 
 Processor::R ServoProcessor::processAction(const Action& action, int handle) {
-  if (action.command != servoPredef && action.command != servoPos) {
+  if (action.command != servo) {
     return ignored;
   }
   if (!available()) {

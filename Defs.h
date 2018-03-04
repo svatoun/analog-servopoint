@@ -46,7 +46,7 @@ const byte colPins[COLS] = { 2, 3, 4, A1 };
 const int maxId = ROWS * COLS;
 
 const int QUEUE_SIZE = 10;
-const int MAX_ACTIONS = 150;
+const int MAX_ACTIONS = 128;
 const int MAX_COMMANDS = 32;
 const int MAX_WAIT_COUNT = 10;
 const int MAX_SERVO = 16;

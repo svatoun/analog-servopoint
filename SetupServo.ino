@@ -99,6 +99,7 @@ void InputServoPos::displayCurrent(int typed, int selectedPos) {
   clearNewCommand();
   Action a1;
   a1.asServoAction().move(servoIndex, selectedPos);
+  Serial.print(F("Action data: ")); Serial.println(a1.data);
   addNewCommand(a1);
   executor.playNewAction();
 }

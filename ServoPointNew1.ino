@@ -1,7 +1,17 @@
+
+#define SOFTWARE_SERVO
+
+
 #include <EEPROM.h>
 #include <Key.h>
 #include <Keypad.h>
+
+#ifdef SOFTWARE_SERVO
+#include <SoftwareServo.h>
+#define Servo SoftwareServo
+#else 
 #include <Servo.h>
+#endif
 
 #include "Common.h"
 
@@ -306,21 +316,21 @@ void processKeys() {
       continue;
     }
     boolean pressed = (k.kstate  == PRESSED);
+    int ch = keypad.getChar(k);
     if (debugInput) {
-      Serial.print("Processing key: #"); Serial.print((int)k.kchar);
+      Serial.print("Processing key: #"); Serial.print(ch);
       if (pressed) {
         Serial.println(" DOWN");
       } else {
         Serial.println(" UP");
       }
     }
-    processKey((int)k.kchar, pressed);
+    processKey(ch, pressed);
   }
 }
 
 void loop() {
   currentMillis = millis();
-  /*
   pressedKey = keypad.getKey();
   if (pressedKey == 1) {
     if (currentMillis - lastOnePressed < 500) {
@@ -332,11 +342,8 @@ void loop() {
       onePressedCount = 0;
     }
   }
-  */
   if (setupActive) {
     setupLoop();
-  } else {
-    
   }
   processKeys();
   handleAckLed();
