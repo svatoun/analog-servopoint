@@ -3,8 +3,8 @@
 
 
 #include <EEPROM.h>
-#include <Key.h>
-#include <Keypad.h>
+#include "Key2.h"
+#include "Keypad2.h"
 
 #ifdef SOFTWARE_SERVO
 #include <SoftwareServo.h>
@@ -32,7 +32,7 @@ Command commands[MAX_COMMANDS];
 */
 Action  newCommand[newCommandPartMax];
 
-KeypadAnalog keypad = KeypadAnalog(makeKeymap(keys), rowPins, colPins, ROWS, COLS);
+AnalogKeypad keypad(makeKeymap(keys), rowPins, colPins, ROWS, COLS);
 
 //ModuleChain *modules;
 
@@ -194,8 +194,8 @@ void setup() {
 
   // initial load of key / switch positions
   keypad.getKeys();
-
-  enterSetup();
+  keypad.addChangeListener(&processKeyCallback);
+//  enterSetup();
 
   int dataSize = sizeof(servoConfig) + sizeof(commands);
   dataSize += sizeof(Executor) + sizeof(ServoProcessor);
@@ -304,7 +304,7 @@ void processKeys() {
     return;
   }
   for (byte i = 0; i < LIST_MAX; i++) {
-    const Key& k = keypad.key[i];
+    const Key2& k = keypad.key[i];
     if (!k.stateChanged) {
       continue;
     }
@@ -329,6 +329,30 @@ void processKeys() {
   }
 }
 
+void processKeyCallback(const Key2& k, char c) {
+    if (setupActive) {
+      return;
+    }
+    if (debugInput) {
+      Serial.println(F("Key state changed"));
+    }
+    if (k.kstate == IDLE || k.kstate == HOLD) {
+      // ignore hold / idle
+      return;
+    }
+    boolean pressed = (k.kstate  == PRESSED);
+    int ch = keypad.getChar(k);
+    if (debugInput) {
+      Serial.print("Processing key: #"); Serial.print(ch);
+      if (pressed) {
+        Serial.println(" DOWN");
+      } else {
+        Serial.println(" UP");
+      }
+    }
+    processKey(ch, pressed);
+}
+
 void loop() {
   currentMillis = millis();
   pressedKey = keypad.getKey();
@@ -345,7 +369,7 @@ void loop() {
   if (setupActive) {
     setupLoop();
   }
-  processKeys();
+//  processKeys();
   handleAckLed();
   executor.process();
   ModuleChain::invokeAll(ModuleCmd::periodic);

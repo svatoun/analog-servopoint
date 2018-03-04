@@ -692,41 +692,6 @@ struct ModuleChain {
   static void invokeAll(ModuleCmd cmd);
 };
 
-///////////////////////////////////////////////////////////////////////////////////////////////////////////////
-// Analog input keypad extension
-class KeypadAnalog : public Keypad {
-  public:
-    KeypadAnalog(char *userKeymap, byte *row, byte *col, byte numRows, byte numCols) : Keypad(userKeymap, row, col, numRows, numCols) {}
-
-    virtual void pin_mode(byte pinNum, byte mode);
-    virtual void pin_write(byte pinNum, boolean level);
-    virtual int  pin_read(byte pinNum);
-};
-
-void KeypadAnalog::pin_mode(byte pinNum, byte mode) {
-  if (pinNum >= A6) {
-    // ignore pinMode for analog inputs
-    return;
-  }
-  Keypad::pin_mode(pinNum, mode);
-}
-
-void KeypadAnalog::pin_write(byte pinNum, boolean level) {
-  if (pinNum >= A6) {
-    return;
-  }
-  Keypad::pin_write(pinNum, level);
-}
-
-int KeypadAnalog::pin_read(byte pinNum) {
-  if (pinNum < A6) {
-    return Keypad::pin_read(pinNum);
-  }
-
-  // attempt to read analog
-  return (analogRead(pinNum - A0) > 300) ? 1 : 0;
-}
-
 //      End keypad extension
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
