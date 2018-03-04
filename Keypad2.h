@@ -30,8 +30,8 @@
 ||
 */
 
-#ifndef KEYPAD_H
-#define KEYPAD_H
+#ifndef KEYPAD2_H
+#define KEYPAD2_H
 
 #define KEYPAD_SAVE_MEMORY
 

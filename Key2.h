@@ -29,8 +29,12 @@
 ||
 */
 
-#ifndef Keypadlib_KEY_H_
-#define Keypadlib_KEY_H_
+#ifndef Keypadlib2_KEY_H_
+#define Keypadlib2_KEY_H_
+
+#ifdef Keypadlib_KEY_H_
+# error  It seems the project includes standard Keypad.h or Key.h. They contains conflicting declarations
+#endif
 
 #include <Arduino.h>
 
