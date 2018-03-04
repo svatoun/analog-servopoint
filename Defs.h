@@ -45,14 +45,14 @@ const byte colPins[COLS] = { 2, 3, 4, A1 };
 
 const int maxId = ROWS * COLS;
 
-const int QUEUE_SIZE = 10;
-const int MAX_ACTIONS = 128;
-const int MAX_COMMANDS = 32;
-const int MAX_WAIT_COUNT = 10;
-const int MAX_SERVO = 16;
-const int MAX_OUTPUT = 32;
-const int MAX_INPUT_BUTTONS = 16;
-const int MAX_SPEED = 8;
+const int QUEUE_SIZE = 10;          // # of parallel executions
+const int MAX_ACTIONS = 128;        // # of possible actions
+const int MAX_COMMANDS = 32;        // # of defined commands
+const int MAX_WAIT_COUNT = 10;      // # of suspended executions
+const int MAX_SERVO = 16;           // # of controlled servos
+const int MAX_OUTPUT = 64;          // # of on/off outputs from the shift register
+const int MAX_INPUT_BUTTONS = 16;   // # of input buttons
+const int MAX_SPEED = 8;            // servo speed
 
 const int OUTPUT_BIT_SIZE = (MAX_OUTPUT + 7) / 8;
 

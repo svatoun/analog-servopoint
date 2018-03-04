@@ -338,6 +338,10 @@ struct OutputActionData {
 
     boolean isOn();
 
+    int output() {
+      return outputIndex;
+    }
+
     void print(String& s) {
       s.concat(F("OUT:")); s.concat(outputIndex); s.concat(':');
       switch (fn) {
