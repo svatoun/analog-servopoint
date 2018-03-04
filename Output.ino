@@ -98,7 +98,7 @@ void outputCommand(String& s) {
 }
 
 void outputStatus() {
-  Serial.println("State of outputs: ");
+  Serial.println(F("State of outputs: "));
 
   for (int i = 0; i < MAX_OUTPUT; i++) {
     if (i % 32 == 0) {

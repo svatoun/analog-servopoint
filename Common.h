@@ -208,9 +208,11 @@ struct Action {
     boolean isLast() {
       return last;
     }
+    
     boolean isEmpty() {
       return command == none;
     }
+    
     const Action* next();
 
     void notLast() {
@@ -221,6 +223,10 @@ struct Action {
 
     static int findSpace(int size);
 
+    template<typename X> X& asActionData() {
+      return (X&)(*this);
+    }
+    
     ServoActionData& asServoAction() {
       return (ServoActionData&)(*this);
     }

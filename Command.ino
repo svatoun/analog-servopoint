@@ -53,7 +53,6 @@ void clearCommands() {
 }
 
 void dumpCommands() {
-  Serial.println("In Dump handler");
   for (int i = 0; i < MAX_COMMANDS; i++) {
     if (commands[i].available()) {
       break;
