@@ -141,7 +141,7 @@ public:
   AnalogKeypad(char *userKeymap, byte *row, byte *col, byte numRows, byte numCols) :
     Keypad2(userKeymap, row, col, numRows, numCols) {};
 
-  void digitalPins(byte count) { maxDigitalPin = count; };
+  void digitalPins(byte maxInclusive) { maxDigitalPin = maxInclusive; };
     
   virtual void pin_mode(byte pinNum, byte mode) override;
   virtual int  pin_read(byte pinNum) override;
