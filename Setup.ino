@@ -102,7 +102,7 @@ void handleHoldAdjustment(int keycode, int step, void (*exec)(int)) {
   if (idx == -1 || keypad.key[idx].kstate != HOLD) {
     return;
   }
-  Serial.println("Idle number rinput");
+  Serial.println(F("Idle number rinput"));
   if (exec == NULL) {
     Serial.println(F("No callback"));
     return;

@@ -166,6 +166,7 @@ extern int setupServoIndex;
 typedef void (*ActionRenumberFunc)(int, int);
 
 struct Action;
+struct ActionRef;
 /**
    Action defines the step which should be executed.
 */
@@ -177,22 +178,22 @@ struct Action {
 
     unsigned int data : 12; // action type-specific data
 
-    static Action actionTable[MAX_ACTIONS];
+//    static Action actionTable[MAX_ACTIONS];
     static ActionRenumberFunc renumberCallbacks[];
     static dumper_t dumpers[];
     static int  top;
   public:
     Action();
-    Action(const Action& data);
 
     static void registerDumper(Instr cmd, dumper_t dumper);
 
     static void initialize();
     static void renumberCallback(ActionRenumberFunc f);
 
-    static Action* get(int index);
+    static Action& get(int index, Action& target);
+    static ActionRef getRef(byte index);
 
-    static boolean isPersistent(const Action* a) { return (a > actionTable) && (a < (actionTable + MAX_ACTIONS)); }
+    //static boolean isPersistent(const Action* a) { return (a > actionTable) && (a < (actionTable + MAX_ACTIONS)); }
     
     void makeLast() {
       last = 1;
@@ -213,7 +214,7 @@ struct Action {
       return command == none;
     }
     
-    const Action* next();
+    //const Action* next();
 
     void notLast() {
       last = 0;
@@ -237,7 +238,58 @@ struct Action {
       return (WaitActionData&)(*this);
     }
 
+    void save(int idx);
+    void load(int idx);
+
     void print(String& s);
+};
+
+const Action noAction;
+
+struct ActionRef {
+private:
+  byte    index;
+  Action  current;
+  const Action* ptr;
+
+private:
+public:
+  enum {
+    noIndex = 0xff,
+    tempIndex = 0xfe
+  };
+  ActionRef() : index(noIndex), ptr(NULL) {
+//    Serial.print("Creating action @"); Serial.print((int)&current, HEX); Serial.print(" command "); Serial.println(current.command);
+  };
+  
+  ActionRef(byte aIndex) : index(aIndex), ptr(NULL) {
+    current.load(aIndex);
+  }
+
+  ActionRef(const Action* aPtr) : 
+    index(aPtr == NULL ? noIndex : tempIndex), 
+    current(aPtr == NULL ? noAction : *aPtr),
+    ptr(aPtr) {
+      Serial.print("Loading action @"); Serial.print((int)&current, HEX); Serial.print(" from "); Serial.println((int)aPtr, HEX);
+  };
+  boolean isPersistent() { return index < tempIndex; };
+  void clear();
+  const Action& skip();
+  const Action& next();
+  const Action& a() { return current; };
+  const Action* aptr() { return &current; };
+  int i() { return index == tempIndex ? (int)ptr : index; };
+  boolean isEmpty();
+  boolean isLast() { return isEmpty() || current.isLast(); };
+
+  void free();
+  void save();
+
+  void saveTo(int index);
+
+  void makeLast() { 
+    current.makeLast(); 
+  }
 };
 
 struct ServoActionData {
@@ -449,22 +501,23 @@ struct ExecutionState {
   boolean wait : 1;
   // 1 bits remains
   
-  const Action* action; // the current executing action
+  ActionRef  action; // the current executing action
   Processor* processor;
 
   byte  data[4];
 
   boolean isAvailable() {
-    return !blocked && action == NULL;
+    return !blocked && action.isEmpty();
   }
 
-  ExecutionState() : id(0), blocked(false), action(NULL), processor(NULL) {}
+  ExecutionState() : id(0), blocked(false), processor(NULL) {}
+  
   void clear() {
     blocked = false;
-    action = NULL;
+    action.clear();
   }
 };
-static_assert (sizeof(ExecutionState) < 10, "Execution state too large");
+static_assert (sizeof(ExecutionState) < 15, "Execution state too large");
 
 class Executor {
     Processor*  processors[MAX_PROCESSORS];
@@ -484,6 +537,8 @@ class Executor {
   public:
     Executor();
 
+    void boot();
+
     void addProcessor(Processor*);
     void process();
 
@@ -491,10 +546,12 @@ class Executor {
     //void unblockAction(const Action**);
     void blockAction(int index);
     void finishAction(const Action* action, int index);
+    void finishAction(const ExecutionState& state);
 
     void playNewAction();
-    void schedule(const Action*, int id);
-    void schedule(const Action*);
+    void schedule(const ActionRef&, int id);
+    void schedulePtr(const Action*, int id);
+    void schedule(const ActionRef& ref);
 };
 
 /**
@@ -518,6 +575,7 @@ class ServoProcessor : public Processor {
     long prevMillis;
     byte actionIndex;
     const Action* blockedAction;
+    const ExecutionState* blockedState;
     byte targetPosCounter;
 
     byte pwmPin;
@@ -539,7 +597,7 @@ class ServoProcessor : public Processor {
     void start(const Action& action, Action** increment); // setup data from the action
     void clear();                     // stop working
     static void clearAll();
-
+    R processAction2(ExecutionState& state) override;
     R processAction(const Action& ac, int handle) override;
     boolean cancel(const Action& ac) override;
 
@@ -561,6 +619,8 @@ class Output {
 
   public:
     Output();
+
+    void boot();
 
     /**
        Sets the corresponding bit up
@@ -609,7 +669,7 @@ struct Command {
     Command() : input(0), actionIndex(0xff), on(false), wait(true) {}
     Command(int aI, boolean aO, boolean aW, int aN) : input(aI), on(aO), wait(aW), actionIndex(aN) {}
     Command(int aI, boolean aO, boolean aW) : input(aI), on(aO), wait(aW), actionIndex(0xff) {}
-    Command(const Command& copy) : input(copy.input), on(copy.on), wait(copy.wait), actionIndex(copy.actionIndex) {}
+//    Command(const Command& copy) : input(copy.input), on(copy.on), wait(copy.wait), actionIndex(copy.actionIndex) {}
 
     boolean available() {
       return actionIndex > MAX_ACTIONS;
@@ -635,7 +695,7 @@ struct Command {
 
     void print(String& s);
 
-    Command& operator =(const Command& other);
+//    Command& operator =(const Command& other);
 };
 
 class NumberInput {
@@ -736,7 +796,7 @@ static_assert (eeaddr_servoPositions >= eeaddr_servoConfig + 2 + MAX_SERVO * siz
 const int eeaddr_actionTable = 0x4e;
 static_assert (eeaddr_actionTable >= eeaddr_servoPositions + 2 + MAX_SERVO * sizeof(byte), "EEPROM data overflow");
  
-const int eeaddr_commandTable = (eeaddr_actionTable + sizeof(Action::actionTable)) + 2;
+const int eeaddr_commandTable = (eeaddr_actionTable + MAX_ACTIONS * sizeof(Action)) + 2;
 static_assert (eeaddr_commandTable >= eeaddr_actionTable + 2 + MAX_ACTIONS * sizeof(Action), "EEPROM data overflow");
 
 const int eeaddr_top = (eeaddr_commandTable + MAX_COMMANDS * sizeof(Command)) + 2;

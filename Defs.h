@@ -32,8 +32,8 @@ const int servoSelectB = 8;
 
 const int servoPowerA = A2;
 const int servoPowerB = 5;
-const int servoPowerC = 12;
-const int servoPowerD = A3;
+const int servoPowerC = A3;
+const int servoPowerD = 12;
 
 /**
  * Configuration for the keypad / control buttons. Buttons are sequentially numbered to generate orinals - indexes into the command table.

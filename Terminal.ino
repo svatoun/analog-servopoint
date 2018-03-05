@@ -8,7 +8,7 @@ boolean interactive = true;
 int8_t commandDef = -1;
 Command definedCommand;
 
-const int maxLineCommands = 25;
+const int maxLineCommands = 30;
 
 LineCommand lineCommands[maxLineCommands];
 
@@ -310,6 +310,7 @@ void commandFinish(String& s) {
     Serial.print(F("Defined command #")); Serial.println(idx);
     Serial.print(F("Free RAM: ")); Serial.println(freeRam());
   }
+  commandEepromSave();
   resetTerminal();
 }
 
@@ -349,7 +350,7 @@ void commandExecute(String& s) {
 }
 
 void commandDumpEEProm(String& s) {
-  Serial.println("EEPROM Dump:");
+  Serial.println(F("EEPROM Dump:"));
   String line;
   line.reserve(8 * 3 + 4);
   int cnt = 0;

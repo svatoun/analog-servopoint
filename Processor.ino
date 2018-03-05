@@ -1,8 +1,16 @@
 
+void bootProcessors() {
+  output.boot();
+  executor.boot();
+}
+
 Output::Output() {
   for (int i = 0; i < OUTPUT_BIT_SIZE; i++) {
     lastOutputState[i] = newOutputState[i] = 0;
   }
+}
+
+void Output::boot() {
   pinMode(latchPin, OUTPUT);
   pinMode(clockPin, OUTPUT);
   pinMode(dataPin, OUTPUT);
@@ -91,6 +99,9 @@ Executor::Executor() {
   for (int i = 0; i < MAX_PROCESSORS; i++) {
     processors[i] = NULL;
   }
+}
+
+void Executor::boot() {
   clear();
 }
 
@@ -119,27 +130,23 @@ void Executor::clear() {
   for (int i = 0; i < QUEUE_SIZE; i++) {
     queue[i].clear();
   }
-//  for (int i = 0; i < MAX_WAIT_COUNT; i++) {
-//    actionTimeout[i] = 0;
-//  }
-//  timeoutCount = 0;
 }
 
 void Executor::handleWait(Action* a) {
   
 }
 
-void Executor::schedule(const Action* ptr) {
-  schedule(ptr, 0);  
+void Executor::schedule(const ActionRef& a) {
+  schedule(a, 0);  
 }
 
-void Executor::schedule(const Action* ptr, int id) {
+void Executor::schedule(const ActionRef& ref, int id) {
   if (debugExecutor) {
-    Serial.print(F("Scheduling action: ")); Serial.println((int)ptr, HEX);
+    Serial.print(F("Scheduling action: ")); Serial.println((int)ref.i(), HEX);
   }
   for (int i = 0; i < QUEUE_SIZE; i++) {
-    if (queue[i].action == NULL) {
-      queue[i].action = ptr;
+    if (queue[i].isAvailable()) {
+      queue[i].action = ref;
       queue[i].id = id;
       queue[i].blocked = false;
       if (debugExecutor) {
@@ -161,6 +168,14 @@ void Executor::blockAction(int index) {
   queue[index].blocked = true;
 }
 
+void Executor::finishAction(const ExecutionState& state) {
+  if ((&state < queue) || (&state >= (queue + QUEUE_SIZE))) {
+    return;
+  }
+  int handle = &state - queue;
+  finishAction(&state.action.a(), handle);
+}
+
 void Executor::finishAction(const Action* action, int index) {
   if (debugExecutor) {
     Serial.print(F("Finishing :")); Serial.println(index);
@@ -171,21 +186,18 @@ void Executor::finishAction(const Action* action, int index) {
   ExecutionState& q = queue[index];
   if (debugExecutor) {
     Serial.print(F("Action to finish:")); Serial.println((int)action, HEX);
-    Serial.print(F("Action in state:")); Serial.println((int)q.action, HEX);
+    Serial.print(F("Action in state:")); Serial.println(q.action.i(), HEX);
   }
   q.blocked = false;
-  if (q.action == NULL || q.action != action) {
+  if (q.action.isEmpty()) {
     return;
   }
   if (debugExecutor) {
-    Serial.print(F("current Action: ")); Serial.println((int)q.action, HEX);
+    Serial.print(F("current Action: ")); Serial.println(q.action.i(), HEX);
   }
-  Action *a = q.action;
-  if (a != NULL) {
-    q.action = a->next();
-  }
+  q.action.next();
   if (debugExecutor) {
-    Serial.print(F("Finished action: ")); Serial.print(index); Serial.print(F(", nextAction: ")); Serial.println((int)q.action, HEX);
+    Serial.print(F("Finished action in queue: ")); Serial.print(index); Serial.print(F(", nextAction: ")); Serial.println(q.action.i(), HEX);
   }
 }
 
@@ -209,48 +221,55 @@ void Executor::process() {
   }
   for (int i = 0; i < QUEUE_SIZE; i++) {
     ExecutionState& q = queue[i];
-    if (q.action == NULL) {
+    if (q.action.isEmpty()) {
        continue;
      }
     if (q.processor != NULL) {
-      Processor::R result = q.processor->pending(*q.action, &q.data);
+      Processor::R result = q.processor->pending(q.action.a(), &q.data);
       if (result == Processor::finished) {
+        if (debugExecutor) {
+          Serial.print(F("Finished pending action at ")); Serial.print(q.action.i(), HEX); Serial.print(F(", command = ")); Serial.println(q.action.a().command);
+        }
         unblock(q);
-        q.action = q.action->next();
+        q.action.next();
       }
     }
     if (q.blocked) {
       continue;
     }
 
+    const Action& a = q.action.a();
+    if (debugExecutor) {
+      Serial.print(F("Processing queue ")); Serial.print(i); Serial.print(F(" at ")); Serial.print((int)&a, HEX); Serial.print(F(" / ")); 
+      Serial.print(q.action.i(), HEX); Serial.print(F(", command = ")); Serial.println(a.command);
+    }
     // attempt to handle the action
     for (int px = 0; px < MAX_PROCESSORS; px++) {
       Processor* proc = processors[px];
       if (proc == NULL) {
         continue;
       }
-      if (debugExecutor) {
-        Serial.print("Processing action at "); Serial.print((int)queue[i].action, HEX); Serial.print(", command = "); Serial.println(queue[i].action->command);
-      }
       Processor::R res;
 
       res = proc->processAction2(q);
       if (res == Processor::ignored) {
-          res = proc->processAction(*q.action, i);
+          res = proc->processAction(a, i);
       }
       if (res == Processor::ignored) {
         continue;
       }
       if (debugExecutor) {
-        Serial.print(F("Action ")); Serial.print(i); Serial.print(" : "); Serial.println(res);
+        Serial.print(F("Action ")); Serial.print(i); Serial.print(F(" : ")); Serial.println(res);
       }
-      if (q.action != NULL) {
+      if (!q.action.isEmpty()) {
         switch (res) {
           case Processor::blocked:
             block(q, proc);
+            Serial.print(F("Blocked action at ")); Serial.print(queue[i].action.i(), HEX); Serial.print(F(", command = ")); Serial.println(a.command);
             break;
           case Processor::finished:
-            queue[i].action = queue[i].action->next();
+            unblock(q);
+            q.action.next();
             break;
         }
       }

@@ -82,9 +82,9 @@ int addNewCommand(const Action& t) {
       if (debugControl) {
         Serial.print(F("Added at position"));
         Serial.print(i);
-        Serial.print(" = ");
+        Serial.print(F(" = "));
         Serial.print((int)&newCommand[i], HEX);
-        Serial.print(":");
+        Serial.print(F(":"));
         Serial.print(newCommand[i].command);
         Serial.print(F(", data = "));
         Serial.println(newCommand[i].data, HEX);
@@ -194,6 +194,8 @@ void setup() {
   initializeHW();
   checkInitEEPROM();
 
+  bootProcessors();
+  
   ModuleChain::invokeAll(ModuleCmd::initialize);
   
   //  initializeTables();
@@ -206,16 +208,11 @@ void setup() {
   keypad.addChangeListener(&processKeyCallback);
 //  enterSetup();
 
-  int dataSize = 0; // sizeof(servoConfig) + sizeof(commands);
-  dataSize += sizeof(Executor) + sizeof(ServoProcessor);
-  dataSize += sizeof(Action::actionTable);
-
-//  Serial.print(F("Size of servoConfig: ")); Serial.println(sizeof(servoConfig));
   Serial.print(F("Size of commands: ")); Serial.println(sizeof(commands));
   Serial.print(F("Size of executors: ")); Serial.println(sizeof(Executor) + sizeof(ServoProcessor));
-  Serial.print(F("Size of actions: ")); Serial.println(sizeof(Action::actionTable));
+  Serial.print(F("Size of actions: ")); Serial.println(sizeof(Action) * MAX_ACTIONS);
 
-  // XXX setupTerminal();
+  setupTerminal();
 
   registerLineCommand("SAV", &saveHandler);
 }
@@ -307,37 +304,6 @@ void processKey(int k, boolean pressed) {
 }
 
 
-void processKeys() {
-  boolean haveKeys = keypad.getKeys();
-  if (!haveKeys) {
-    return;
-  }
-  for (byte i = 0; i < LIST_MAX; i++) {
-    const Key2& k = keypad.key[i];
-    if (!k.stateChanged) {
-      continue;
-    }
-    if (debugInput) {
-      Serial.println(F("Key state changed"));
-    }
-    if (k.kstate == IDLE || k.kstate == HOLD) {
-      // ignore hold / idle
-      continue;
-    }
-    boolean pressed = (k.kstate  == PRESSED);
-    int ch = keypad.getChar(k);
-    if (debugInput) {
-      Serial.print("Processing key: #"); Serial.print(ch);
-      if (pressed) {
-        Serial.println(" DOWN");
-      } else {
-        Serial.println(" UP");
-      }
-    }
-    processKey(ch, pressed);
-  }
-}
-
 void processKeyCallback(const Key2& k, char c) {
     if (setupActive) {
       return;
@@ -352,11 +318,11 @@ void processKeyCallback(const Key2& k, char c) {
     boolean pressed = (k.kstate  == PRESSED);
     int ch = keypad.getChar(k);
     if (debugInput) {
-      Serial.print("Processing key: #"); Serial.print(ch);
+      Serial.print(F("Processing key: #")); Serial.print(ch);
       if (pressed) {
-        Serial.println(" DOWN");
+        Serial.println(F(" DOWN"));
       } else {
-        Serial.println(" UP");
+        Serial.println(F(" UP"));
       }
     }
     processKey(ch, pressed);
@@ -378,7 +344,6 @@ void loop() {
   if (setupActive) {
     setupLoop();
   }
-//  processKeys();
   handleAckLed();
   executor.process();
   ModuleChain::invokeAll(ModuleCmd::periodic);
@@ -412,11 +377,11 @@ int defineCommand(const Command& def) {
       return defineNewCommand(def, c);
     }
     if (debugCommands) {
-      Serial.print("Skipping: ");
+      Serial.print(F("Skipping: "));
       String s;
       c.print(s);
       Serial.print(s);
-      Serial.print(" ");
+      Serial.print(' ');
       Serial.println(c.actionIndex);
     }
   }

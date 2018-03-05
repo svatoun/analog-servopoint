@@ -1,6 +1,6 @@
 
 
-Action  Action::actionTable[MAX_ACTIONS];
+// Action  Action::actionTable[MAX_ACTIONS];
 ActionRenumberFunc Action::renumberCallbacks[5];
 dumper_t Action::dumpers[] = { NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL };
 
@@ -25,18 +25,22 @@ void Action::print(String& s) {
   }
 }
 
-Action* Action::get(int index) {
+Action& Action::get(int index, Action& target) {
   if (index < 0 || index >= MAX_ACTIONS) {
-    return &actionTable[0];
+    target = noAction;
+    return target;
   }
-  return &actionTable[index];
+  target.load(index);
+  return target;
 }
 
+/*
 Action::Action(const Action& other) {
   last = other.last;
   command = other.command;
   data = other.data;
 }
+*/
 
 void Action::initialize() {
   for (int cbIndex = 0; cbIndex < sizeof(renumberCallbacks) / sizeof(renumberCallbacks[0]); cbIndex++) {
@@ -44,6 +48,14 @@ void Action::initialize() {
   }
 }
 
+void clearActions() {
+  for (int i = 0; i < MAX_ACTIONS; i++) {
+    noAction.save(i);
+  }
+}
+
+
+/*
 const Action* Action::next() {
   if (isLast()) {
     return NULL;
@@ -51,6 +63,7 @@ const Action* Action::next() {
     return this + 1;
   }
 }
+*/
 
 void Action::renumberCallback(ActionRenumberFunc f) {
   for (int i = 0; i < sizeof(renumberCallbacks) / sizeof(renumberCallbacks[0]); i++) {
@@ -74,10 +87,13 @@ int Action::copy(const Action* from, int s) {
   }
   int x = p;
   for (int i = 0; i < s; i++, x++) {
-    actionTable[x] = *from;
+    ActionRef ref(from);
     from++;
+    if (i == s - 1) {
+      ref.makeLast();
+    }
+    ref.saveTo(x);
   }
-  actionTable[x - 1].makeLast();
   return p;
 }
 
@@ -85,7 +101,8 @@ int Action::findSpace(int size) {
   int index;
   int head = -1;
   for (index = 0; index < MAX_ACTIONS; index++) {
-    if (!actionTable[index].isEmpty()) {
+    ActionRef ref(index);
+    if (!ref.isEmpty()) {
       head = -1;
       continue;
     }
@@ -103,7 +120,9 @@ int Action::findSpace(int size) {
   int compactIndex = 0;
   boolean firstNonEmpty = true;
   for (index = 0; index < MAX_ACTIONS; index++) {
-    if (actionTable[index].isEmpty()) {
+    ActionRef ref(index);
+    
+    if (ref.isEmpty()) {
       if (debugCommands) {
         Serial.println(F("Free slot #")); Serial.println(index);
       }
@@ -115,7 +134,7 @@ int Action::findSpace(int size) {
       continue;
     }
 
-    actionTable[compactIndex] = actionTable[index];
+    ref.saveTo(compactIndex);
     if (firstNonEmpty) {
       if (debugCommands) {
         Serial.print(F("Moving action #")); Serial.print(index); Serial.print(F(" to #")); Serial.println(compactIndex);
@@ -145,12 +164,97 @@ int Action::findSpace(int size) {
 }
 
 void Action::freeAll() {
+  /*
   for (int i = 0; i < MAX_ACTIONS; i++) {
     actionTable[i].free();
   }
+  */
 }
 
-void Action::free() {
+ActionRef Action::getRef(byte index) {
+  ActionRef x(index);
+  x.a().load(index);
+  return x;
+}
+
+bool ActionRef::isEmpty() {
+  if (index == noIndex) {
+    return true;
+  }
+  if (index == tempIndex) {
+    if (ptr == NULL) {
+      return true;
+    }
+    return ptr->isEmpty();
+  } else {
+    return ((index >= MAX_ACTIONS) || current.isEmpty());
+  }
+}
+
+void ActionRef::clear() {
+  index = noIndex;
+  current = noAction;
+  ptr = NULL;
+}
+
+const Action& ActionRef::skip() {
+  if (!isEmpty()) {
+    return current;
+  }
+  bool l;
+  do {
+    l = isLast();
+    next();
+  } while(!l);
+  return current;
+}
+
+const Action& ActionRef::next() {
+  if (index == noIndex) {
+    if (!current.isEmpty()) {
+      current = noAction;
+    }
+    return current;    
+  } 
+  
+  if (isLast()) {
+    clear();
+    return current;
+  }
+  if (index == tempIndex) {
+    ptr++;
+    current = *ptr;
+  } else {
+    index++;
+    current.load(index);
+  }
+  return current;
+}
+
+void ActionRef::free() {
+  bool l;
+  do {
+    l = isLast();
+    if (debugCommands) {
+      Serial.print(F("Free action #")); Serial.println(i(), HEX);
+    }
+    if (index == noIndex) {
+      return;
+    }
+    if (index == tempIndex) {
+      // use pointer
+      ptr->init();
+    } else {
+      // save into EEPROM
+      noAction.save(index);
+      if (index == MAX_ACTIONS - 1) {
+        break;
+      }
+    }
+    next();
+  } while (!l && !isEmpty());
+  clear();
+  /*
   bool l;
   Action* a = this;
   do {
@@ -161,6 +265,32 @@ void Action::free() {
     a->init();
     a++;
   } while (!l && ((a - actionTable) < MAX_ACTIONS));
+  */
 }
 
+void ActionRef::save() {
+  if (index >= tempIndex) {
+    return;
+  }
+  current.save(index);
+}
+
+void ActionRef::saveTo(int pos) {
+  if (pos >= MAX_ACTIONS) {
+    return;
+  }
+  current.save(pos);
+  index = pos;
+  ptr = NULL;
+}
+
+void Action::load(int index) {
+  int eeaddr = eeaddr_actionTable + 1 + index * sizeof(Action);
+  EEPROM.get(eeaddr, *this);
+}
+
+void Action::save(int index) {
+  int eeaddr = eeaddr_actionTable + 1 + index * sizeof(Action);
+  EEPROM.put(eeaddr, *this);
+}
 

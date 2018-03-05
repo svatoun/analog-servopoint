@@ -11,8 +11,8 @@ void commandModuleHandler(ModuleCmd cmd) {
       break;
     case eepromSave:
       Serial.println(F("Saving actions and commands"));
-      eeBlockWrite('A', eeaddr_actionTable, &Action::actionTable, sizeof(Action::actionTable));
-      eeBlockWrite('C', eeaddr_commandTable, &commands[0], sizeof(commands));
+//      eeBlockWrite('A', eeaddr_actionTable, &Action::actionTable, sizeof(Action::actionTable));
+      commandEepromSave();
       break;
     case status:
       commandStatus();
@@ -22,17 +22,22 @@ void commandModuleHandler(ModuleCmd cmd) {
       break;
     case reset:
       clearCommands();
+      clearActions();
       break;
   }
 }
 
+void commandEepromSave() {
+    eeBlockWrite('C', eeaddr_commandTable, &commands[0], sizeof(commands));
+}
+
 void commandStatus() {
   int actionCount = 0;
+  Action tmp;
   for (int i = 0; i < MAX_ACTIONS; i++) {
-    if (Action::get(i)->isEmpty()) {
-      break;
+    if (!Action::get(i, tmp).isEmpty()) {
+      actionCount++;
     }
-    actionCount++;
   }
   int cmdCount = 0;
   for (int i = 0; i < MAX_COMMANDS; i++) {
@@ -61,20 +66,20 @@ void dumpCommands() {
     commands[i].print(s);
     Serial.println(s);
     int actionIndex = commands[i].actionIndex;
-    Action* a = Action::get(a);
-    while (a != NULL) {
+    ActionRef ref = Action::getRef(actionIndex);
+    while (!ref.isEmpty()) {
       s = "";
-      a->print(s);
+      ref.a().print(s);
       Serial.println(s);
-      a = a->next();
+      ref.next();
     }
     Serial.println("FIN");
   }
 }
 
 void commandEepromLoad() {
-    Serial.println(F("Loading actions"));
-    eeBlockRead('A', eeaddr_actionTable, &Action::actionTable, sizeof(Action::actionTable));
+//    Serial.println(F("Loading actions"));
+//    eeBlockRead('A', eeaddr_actionTable, &Action::actionTable, sizeof(Action::actionTable));
     Serial.println(F("Loading commands"));
     eeBlockRead('C', eeaddr_commandTable, &commands[0], sizeof(commands));
 }
@@ -91,7 +96,7 @@ void Command::execute() {
   if (available()) {
     return;
   }
-  executor.schedule(Action::get(actionIndex));
+  executor.schedule(Action::getRef(actionIndex));
 }
 
 const Command* Command::find(int input, boolean state) {
@@ -122,12 +127,13 @@ void Command::free() {
   }
   int ai = actionIndex;
   init();
+  
   if (ai < MAX_ACTIONS) {
-    Action* a = Action::get(ai);
+    ActionRef ref = Action::getRef(ai);
     if (debugCommands) {
-      Serial.print(F("Attempt to free action #")); Serial.print(ai); Serial.print(F(" at ")); Serial.println((int)a);
+      Serial.print(F("Attempt to free action #")); Serial.print(ai); 
     }
-    a->free();
+    ref.free();
   }
   /*
   boolean last;
@@ -138,6 +144,7 @@ void Command::free() {
   */
 }
 
+/*
 Command& Command::operator =(const Command& other) {
   free();
   input = other.input;
@@ -145,4 +152,5 @@ Command& Command::operator =(const Command& other) {
   wait = other.wait;
   actionIndex = other.actionIndex;
 }
+*/
 

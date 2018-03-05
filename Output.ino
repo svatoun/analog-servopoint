@@ -35,8 +35,7 @@ boolean OutputProcessor::cancel(const Action& a) {
 }
 
 Processor::R OutputProcessor::processAction2(ExecutionState& state) {
-  const Action* a = state.action;
-  Serial.println("in ProcessAction2");
+  const Action* a = state.action.aptr();
   if (a->command != onOff) {
     return Processor::ignored;
   }
@@ -80,10 +79,10 @@ void outputCommand(String& s) {
   } else {
     char c = s.charAt(0);
     switch (c) {
-      case '+': case '1': case 'S': case 's':
+      case '+': case '1': case 'S': case 's': case 'U': case 'u':
         outAction.turnOn(n);
         break;
-      case '-': case '0': case 'R': case 'r':
+      case '-': case '0': case 'R': case 'r': case 'D': case 'd':DEF:
         outAction.turnOff(n);
         break;
       case '*': case 'T': case 't': 

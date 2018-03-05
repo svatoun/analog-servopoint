@@ -322,21 +322,21 @@ void waveSelectedServo(int servoId) {
     addNewCommand(a1);
     if (debugControl) {
       a1.asServoAction().print(out);
-      out.concat("\n");
+      out.concat('\n');
     }
 
     a1.asServoAction().move(servoId, 110);
     addNewCommand(a1);
     if (debugControl) {
       a1.asServoAction().print(out);
-      out.concat("\n");
+      out.concat('\n');
     }
 
     a1.asServoAction().moveLeft(servoId);
     addNewCommand(a1);
     if (debugControl) {
       a1.asServoAction().print(out);
-      out.concat("\n");
+      out.concat('\n');
 
       Serial.print(out);
     }

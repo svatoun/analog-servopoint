@@ -27,6 +27,11 @@ void servoSetup() {
   digitalWrite(servoPowerC, HIGH);
   digitalWrite(servoPowerD, HIGH);
 
+  executor.addProcessor(&processors[0]);
+  processors[0].clear();
+  executor.addProcessor(&processors[1]);
+  processors[1].clear();
+  
   processors[0].attach(pwmPinA, 0b01010101);
   processors[1].attach(pwmPinB, 0b10101010);
   processors[0].linkWith(&processors[1]);
@@ -37,7 +42,7 @@ void servoSetup() {
   servoEepromLoad();
 
   if (debugControl) {
-    Serial.println("Servo config:");
+    Serial.println(F("Servo config:"));
     servoDump();
     servoStatus();
   }
@@ -136,6 +141,21 @@ void ServoConfig::save(int idx) {
   EEPROM.put(eeaddr_servoConfig + idx * sizeof(ServoConfig), *this);
 }
 
+
+void waitAndRefresh(int l, Servo& s1, Servo& s2) {
+#ifdef SOFTWARE_SERVO
+  long ms = millis();
+  long e = ms + l;
+  while (millis() < e) {
+    delay(5);
+    s1.refresh();
+    s2.refresh();
+  }
+#else
+  delay(l);
+#endif
+}
+
 void startServos1To8() {
   Servo s1;
   Servo s2;
@@ -162,7 +182,7 @@ void startServos1To8() {
     }
     s1.write(pos1);
     s2.write(pos2);
-    delay(100);
+    waitAndRefresh(100, s1, s2);
     // enable power
     int powerPin;
     switch (sel) {
@@ -190,7 +210,7 @@ void startServos1To8() {
 */
     // power up servo
     digitalWrite(powerPin, LOW);
-    delay(200);
+    waitAndRefresh(200, s1, s2);
   }
 
   // detach from HW pins
@@ -213,10 +233,8 @@ void handleServoMovement() {
   }
 }
 
-ServoProcessor::ServoProcessor() : servoIndex(noservo), actionIndex(noaction), blockedAction(NULL), servoMask(0)
+ServoProcessor::ServoProcessor() : servoIndex(noservo), actionIndex(noaction), blockedAction(NULL), blockedState(NULL), servoMask(0)
 {
-  executor.addProcessor(this);
-  clear();
 }
 
 void ServoProcessor::attach(int pin, unsigned long mask) {
@@ -230,6 +248,9 @@ void ServoProcessor::linkWith(ServoProcessor *other) {
 }
 
 void ServoProcessor::tick() {
+#ifdef SOFTWARE_SERVO
+  ctrl.refresh();
+#endif
   if (available()) {
     return;
   }
@@ -275,6 +296,7 @@ void ServoProcessor::clear() {
   servoIndex = noservo;
   actionIndex = noaction;
   blockedAction = NULL;
+  blockedState = NULL;
   enable = false;
   targetPosCounter = 0;
 }
@@ -283,11 +305,15 @@ void ServoProcessor::moveFinished() {
   if (debugServo) {
     Serial.print(servoIndex); Serial.println(F(": Move finished"));
   }
-  int i = actionIndex;
-  executor.finishAction(blockedAction, i);
-  if (Action::isPersistent(blockedAction)) {
+  if (blockedState == NULL) {
+    Serial.println(F("No blocked state"));
+    clear();
+    return;
+  }
+  if (setupServoIndex < 0) {
     servoEEWrite();
   }
+  executor.finishAction(*blockedState);
   clear();
 }
 
@@ -310,7 +336,12 @@ boolean ServoProcessor::cancel(const Action& action) {
   }
 }
 
-Processor::R ServoProcessor::processAction(const Action& action, int handle) {
+Processor::R ServoProcessor::processAction(const Action& a, int h) {
+  return ignored;
+}
+
+Processor::R ServoProcessor::processAction2(ExecutionState& state) {
+  const Action& action = state.action.a();
   if (action.command != servo) {
     return ignored;
   }
@@ -346,7 +377,7 @@ Processor::R ServoProcessor::processAction(const Action& action, int handle) {
   }
   int curAngle = servoPositions[s];
   if (debugServo) {
-    Serial.print(s); Serial.print(F(": Action ")); Serial.print((int)&action, HEX); Serial.print(F(" to move from ")); Serial.print(curAngle); Serial.print(F(", target = ")); Serial.println(target);
+    Serial.print(s); Serial.print(F(": Action to move from ")); Serial.print(curAngle); Serial.print(F(", target = ")); Serial.println(target);
   }
   if (target == curAngle) {
     clear();
@@ -355,7 +386,6 @@ Processor::R ServoProcessor::processAction(const Action& action, int handle) {
   setupSelector(s);
   ctrl.attach(pwmPin);
   servoIndex = s;
-  actionIndex = handle;
   targetAngle = target;
   prevMillis = currentMillis;
   servoSpeed = overrideSpeed == -1 ? cfg.speed() : overrideSpeed;
@@ -365,6 +395,7 @@ Processor::R ServoProcessor::processAction(const Action& action, int handle) {
   enable = true;
   ctrl.write(curAngle);
   blockedAction = &action;
+  blockedState = &state;
   return blocked;
 }
 
