@@ -47,8 +47,9 @@ void Output::flush() {
   if (debugOutput) {
     Serial.print(F("Propagating output changes: "));
   }
+  pinMode(clockPin, OUTPUT);
   digitalWrite(latchPin, LOW);
-  for (int i = 0; i < MAX_OUTPUT && i < numberOfLatches; i++) {
+  for (int i = 0; i < OUTPUT_BIT_SIZE && i < numberOfLatches; i++) {
     shiftOut(dataPin, clockPin, MSBFIRST, lastOutputState[i]); 
     if (debugOutput) {
       Serial.print(lastOutputState[i], HEX); Serial.print(F(" "));
@@ -58,6 +59,8 @@ void Output::flush() {
     Serial.println(F(""));
   }
   digitalWrite(latchPin, HIGH);
+  delay(1);
+  digitalWrite(latchPin, LOW);
 }
 
 void Output::commit() {
