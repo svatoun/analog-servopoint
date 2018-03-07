@@ -15,7 +15,6 @@ int overrideSpeed = -1;
 void servoSetup() {
   pinMode(servoSelectA, OUTPUT);
   pinMode(servoSelectB, OUTPUT);
-//  pinMode(servo18Enable, OUTPUT);
 
   pinMode(servoPowerA, OUTPUT);
   pinMode(servoPowerB, OUTPUT);
@@ -53,6 +52,7 @@ void servoSetup() {
   registerLineCommand("CAL", &commandCalibrate);
 
   Action::registerDumper(servo, printServoAction);
+  
 }
 
 void printServoAction(const Action& a, String& s) {
@@ -121,9 +121,6 @@ void servoModuleHandler(ModuleCmd cmd) {
       break;
     case reset:
       servoClear();
-      break;
-    case periodic:
-      handleServoMovement();
       break;
   }
 }

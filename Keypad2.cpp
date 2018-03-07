@@ -78,7 +78,7 @@ bool Keypad2::getKeys() {
 
 	// Limit how often the keypad is scanned. This makes the loop() run 10 times as fast.
 	if ( (millis()-startTime)>debounceTime ) {
-        uint bitMap[KEYMAP_MAPSIZE];
+    uint bitMap[KEYMAP_MAPSIZE];
 		scanKeys(bitMap);
 		keyActivity = updateList(bitMap);
 		startTime = millis();
@@ -93,14 +93,23 @@ void Keypad2::scanKeys(uint bitMap[]) {
 	for (byte r=0; r<sizeKpd.rows; r++) {
 		pin_mode(rowPins[r],INPUT_PULLUP);
 	}
-
+        uint* bm = bitMap;
 	// bitMap stores ALL the keys that are being pressed.
 	for (byte c=0; c<sizeKpd.columns; c++) {
+                int val = 0;
+                byte* rp = rowPins;
 		pin_mode(columnPins[c],OUTPUT);
 		pin_write(columnPins[c], LOW);	// Begin column pulse output.
+                uint mask = 0x01;
 		for (byte r=0; r<sizeKpd.rows; r++) {
-			bitWrite(bitMap[r], c, !pin_read(rowPins[r]));  // keypress is active low so invert to high.
+//			bitWrite(bitMap[r], c, !pin_read(rowPins[r]));  // keypress is active low so invert to high.
+                    if (!pin_read(*rp)) {
+                      val |= mask;
+                    }
+                    rp++;
+                    mask <<= 1;
 		}
+                *(bm++) = val;
 		// Set pin to high impedance input. Effectively ends column pulse.
 		pin_write(columnPins[c],HIGH);
 		pin_mode(columnPins[c],INPUT);

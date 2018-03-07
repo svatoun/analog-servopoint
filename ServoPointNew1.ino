@@ -1,6 +1,10 @@
-
+#define DEBUG
+#define SHIFTPWM
 #define SOFTWARE_SERVO
 
+#ifdef SHIFTPWM
+#include <ShiftPWM.h>
+#endif
 
 #include <EEPROM.h>
 #include "Key2.h"
@@ -15,19 +19,31 @@
 
 #include "Common.h"
 
+const byte ShiftPWM_latchPin = latchPin;
+#ifndef SHIFTPWM_PHYSICAL_PINS
+const int ShiftPWM_dataPin = dataPin;
+const int ShiftPWM_clockPin = clockPin; 
+#endif
+
+const bool ShiftPWM_balanceLoad = false;
+const bool ShiftPWM_invertOutputs = false;
+
+const int pwmFrequency = 75;
+
 ModuleChain* ModuleChain::head;
 
 byte state[(maxId + 7) / 8];
 
 Command commands[MAX_COMMANDS];
 
+AnalogKeypad keypad(makeKeymap(keys), rowPins, colPins, ROWS, COLS);
 
 /**
    Serves to build up a new command during setup. Takes priority over any actions
 */
 Action  newCommand[newCommandPartMax];
 
-AnalogKeypad keypad(makeKeymap(keys), rowPins, colPins, ROWS, COLS);
+//AnalogKeypad keypad(makeKeymap(keys), rowPins, colPins, ROWS, COLS);
 
 //ModuleChain *modules;
 
@@ -177,6 +193,15 @@ void initializeHW() {
   digitalWrite(LED_ACK, LOW);
   analogReference(DEFAULT);
   //  servoSetup();
+
+#ifdef SHIFTPWM
+  ShiftPWM.SetAmountOfRegisters(8);
+  ShiftPWM.Start(pwmFrequency, 255);
+
+  for (int i = 0; i < 64; i++) {
+    ShiftPWM.SetOne(i, 140);
+  }
+#endif
 }
 
 void checkInitEEPROM() {
@@ -195,7 +220,7 @@ void setup() {
   checkInitEEPROM();
 
   bootProcessors();
-  
+
   ModuleChain::invokeAll(ModuleCmd::initialize);
   
   //  initializeTables();
@@ -206,7 +231,6 @@ void setup() {
   // initial load of key / switch positions
   keypad.getKeys();
   keypad.addChangeListener(&processKeyCallback);
-//  enterSetup();
 
   Serial.print(F("Size of commands: ")); Serial.println(sizeof(commands));
   Serial.print(F("Size of executors: ")); Serial.println(sizeof(Executor) + sizeof(ServoProcessor));
