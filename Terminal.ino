@@ -225,7 +225,7 @@ void maybeExecuteCommandPart() {
   if (commandDef == -1) {
     executor.playNewAction();
   } else {
-    executor.schedule((&newCommand[0]) + commandDef);
+    executor.schedule((&newCommand[0]) + commandDef, 0, false);
   }
 }
 
@@ -345,7 +345,7 @@ void commandExecute(String& s) {
     Serial.println(F("Unhandled input/state"));
     return;
   }
-  c->execute();
+  c->execute(state);
   
 }
 

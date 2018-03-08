@@ -305,15 +305,12 @@ void ServoProcessor::moveFinished() {
   if (debugServo) {
     Serial.print(servoIndex); Serial.println(F(": Move finished"));
   }
-  if (blockedState == NULL) {
-    Serial.println(F("No blocked state"));
-    clear();
-    return;
-  }
   if (setupServoIndex < 0) {
     servoEEWrite();
   }
-  executor.finishAction(*blockedState);
+  if (blockedState != NULL) {
+    executor.finishAction(*blockedState);
+  }
   clear();
 }
 
@@ -371,7 +368,11 @@ Processor::R ServoProcessor::processAction2(ExecutionState& state) {
   
   int target;
   if (data.isPredefinedPosition()) {
-    target = data.isLeft() ? cfg.left() : cfg.right();
+    boolean left = data.isLeft();
+    if (state.invert) {
+      left = !left;
+    }
+    target = left ? cfg.left() : cfg.right();
   } else {
     target = data.targetPosition();
   }
@@ -394,9 +395,14 @@ Processor::R ServoProcessor::processAction2(ExecutionState& state) {
   }
   enable = true;
   ctrl.write(curAngle);
-  blockedAction = &action;
-  blockedState = &state;
-  return blocked;
+
+  if (state.wait) {
+    blockedAction = &action;
+    blockedState = &state;
+    return blocked;
+  } else {
+    return finished;
+  }
 }
 
 void ServoProcessor::setupSelector(int index) {

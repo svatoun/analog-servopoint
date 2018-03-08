@@ -117,6 +117,23 @@ void Executor::addProcessor(Processor* p) {
   }
 }
 
+boolean Executor::cancelCommand(int id) {
+  for (int i = 0; i < QUEUE_SIZE; i++) {
+    ExecutionState& q = queue[i];
+    if (q.action.isEmpty()) {
+       continue;
+     }
+     if (q.id == id) {
+      if (q.processor != NULL) {
+        q.processor->cancel(q.action.a());
+      }
+      q.clear();
+      return true;
+     }
+  }
+  return false;
+}
+
 void Executor::clear() {
   if (debugExecutor) {
     Serial.println(F("Cleaning execution queue ")); 
@@ -139,11 +156,11 @@ void Executor::handleWait(Action* a) {
   
 }
 
-void Executor::schedule(const ActionRef& a) {
-  schedule(a, 0);  
-}
+//void Executor::schedule(const ActionRef& a) {
+//  schedule(a, 0, false);  
+//}
 
-void Executor::schedule(const ActionRef& ref, int id) {
+void Executor::schedule(const ActionRef& ref, int id, boolean invert) {
   if (debugExecutor) {
     Serial.print(F("Scheduling action: ")); Serial.println((int)ref.i(), HEX);
   }
@@ -152,6 +169,7 @@ void Executor::schedule(const ActionRef& ref, int id) {
       queue[i].action = ref;
       queue[i].id = id;
       queue[i].blocked = false;
+      queue[i].invert = invert;
       if (debugExecutor) {
         Serial.print(F("Scheduled at: ")); Serial.print(i); Serial.print(F(" ")); Serial.println((int)&queue[i].action, HEX);
       }
@@ -282,6 +300,6 @@ void Executor::process() {
 }
 
 void Executor::playNewAction() {
-  schedule(&newCommand[0]);  
+  schedule(&newCommand[0], 0, false);  
 }
 

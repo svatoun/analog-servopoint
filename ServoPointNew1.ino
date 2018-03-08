@@ -285,6 +285,10 @@ boolean eeBlockRead(byte magic, int eeaddr, void* address, int size) {
 long lastOnePressed = 0;
 int onePressedCount = 0;
 
+boolean isPressed(int button) {
+  return keypad.isPressedKey(button) || keypad.isHeldKey(button);
+}
+
 void processKey(int k, boolean pressed) {
   const Command* cmd = Command::find(k, pressed);
   if (cmd == NULL) {
@@ -300,7 +304,7 @@ void processKey(int k, boolean pressed) {
     cmd->print(s);
     Serial.println(s);
   }
-  cmd->execute();
+  cmd->execute(pressed);
 }
 
 

@@ -92,20 +92,48 @@ void initializeTables() {
   }
 }  
 
-void Command::execute() {
+void Command::execute(boolean keyPressed) {
   if (available()) {
     return;
   }
-  executor.schedule(Action::getRef(actionIndex));
+  switch (trigger) {
+    case cmdOn:
+      if (!keyPressed) {
+        break;
+      }
+    case cmdToggle:
+      executor.schedule(Action::getRef(actionIndex), id, false);
+      break;
+    case cmdOff:
+      if (!keyPressed) {
+        executor.schedule(Action::getRef(actionIndex), id, false);
+      }
+      break;
+    case cmdOnCancel:
+      if (keyPressed) {
+        executor.schedule(Action::getRef(actionIndex), id, false);
+      } else if (id != 0) {
+        executor.cancelCommand(id);
+      }
+      break;
+    case cmdOffReverts:
+      if (keyPressed) {
+        executor.schedule(Action::getRef(actionIndex), id, false);
+      } else {
+        executor.schedule(Action::getRef(actionIndex), id, true);
+      }
+      break;
+  }
+//  executor.schedule(Action::getRef(actionIndex));
 }
 
-const Command* Command::find(int input, boolean state) {
+const Command* Command::find(int input, byte t) {
   for (int i = 0; i < MAX_COMMANDS; i++) {
     Command& c = commands[i];
     if (c.available()) {
       return NULL;
     }
-    if (c.input == input && c.on == state) {
+    if (c.input == input && c.trigger == t) {
       return &c;
     }
   }
@@ -115,7 +143,16 @@ const Command* Command::find(int input, boolean state) {
 void Command::print(String& s) {
   s += F("DEF:");
   s += input;
-  s += on ? F(":U") : F(":D");
+  char t;
+  switch (trigger) {
+    case cmdOn:         t = 'C'; break;
+    case cmdOff:        t = 'O'; break;
+    case cmdToggle:     t = 'T'; break;
+    case cmdOnCancel:   t = 'A'; break;
+    case cmOnReverts:   t = 'B'; break;
+    case cmdOffReverts: t = 'R'; break;
+  }
+  s += t;
   if (!wait) {
     s += F(":N");
   }

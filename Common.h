@@ -468,11 +468,36 @@ struct PulseActionData {
 struct WaitActionData {
   byte  last    : 1;
   byte  command : 3;
-  
-  int   waitTime : 11;
+
+  bool  special : 1;
+  int   waitTime : 11;    
+  /*
+  union {
+    struct {
+      byte kind : 3;
+      union {
+        byte inputNo : 5;
+        byte commandNo :6;
+      };
+    };
+  };
+  */
+  enum {
+    indefinitely = 0,
+    finishOnce = 1,
+    alwaysFinish = 2,
+    inputOn,
+    inputOff,
+    commandInactive,
+    wait,
+    
+    timerError
+  };
 
   int   computeDelay();
 };
+
+static_assert (sizeof(WaitActionData) <= sizeof(Action), "Wait action data too long");
 
 struct ExecutionState;
 
@@ -499,6 +524,7 @@ struct ExecutionState {
   int id : 5;           // command ID ?
   boolean blocked : 1;  // if the execution is blocked
   boolean wait : 1;
+  boolean invert : 1;
   // 1 bits remains
   
   ActionRef  action; // the current executing action
@@ -510,7 +536,7 @@ struct ExecutionState {
     return !blocked && action.isEmpty();
   }
 
-  ExecutionState() : id(0), blocked(false), processor(NULL) {}
+  ExecutionState() : id(0), blocked(false), processor(NULL), invert(false) {}
   
   void clear() {
     blocked = false;
@@ -549,9 +575,9 @@ class Executor {
     void finishAction(const ExecutionState& state);
 
     void playNewAction();
-    void schedule(const ActionRef&, int id);
-    void schedulePtr(const Action*, int id);
-    void schedule(const ActionRef& ref);
+    void schedule(const ActionRef&, int id, boolean inverse);
+//    void schedulePtr(const Action*, int id);
+    boolean cancelCommand(int id);
 };
 
 /**
@@ -659,16 +685,31 @@ class Output {
    possibly delayed.
 */
 struct Command {
+    enum {
+      noId = 0,
+      noAction = 0xff
+    };
+
+    enum {
+      cmdOn,          // triggers on switch ON
+      cmdOff,         // triggers on switch OFF
+      cmdToggle,      // triggers on switch toggle
+      cmdOnCancel,    // ON will start the action, OFF will cancel command
+      cmdOffReverts,  // ON will start, OFF will revert
+      cmOnReverts     // next ON will revert the command
+    };
+    
     byte    input : 5;        // up to 32 inputs, e.g. 8 * 4
-    boolean on :    1;        // flag: act on 1 = pressed, 0 = released
+    byte    trigger : 3;      // trigger function
     boolean wait:   1;        // wait on action to finish before next one
     byte    actionIndex :  8; // max 255 actions allowed
-    byte    id :    5;
-    // 8 + 5 + 5 + 2 = 20bits
+    byte    id :    5;        // command Id
+    
+    // 22 bits
   public:
-    Command() : input(0), actionIndex(0xff), on(false), wait(true) {}
-    Command(int aI, boolean aO, boolean aW, int aN) : input(aI), on(aO), wait(aW), actionIndex(aN) {}
-    Command(int aI, boolean aO, boolean aW) : input(aI), on(aO), wait(aW), actionIndex(0xff) {}
+    Command() : input(0), actionIndex(noAction), trigger(cmdOff), wait(true) {}
+    Command(int aI, boolean aO, boolean aW, int aN) : input(aI), trigger(aO ? cmdOn : cmdOff), wait(aW), actionIndex(aN) {}
+    Command(int aI, boolean aO, boolean aW) : input(aI), trigger(aO ? cmdOn : cmdOff), wait(aW), actionIndex(0xff) {}
 //    Command(const Command& copy) : input(copy.input), on(copy.on), wait(copy.wait), actionIndex(copy.actionIndex) {}
 
     boolean available() {
@@ -676,27 +717,43 @@ struct Command {
     }
     
     void init() {
-      actionIndex = 0xff;
+      actionIndex = noAction;
     }
 
     void free();
 
-    boolean matches(int i, boolean o) {
-      return input == i && on == o;
+    boolean matches(int i, byte t) {
+      return input == i && trigger == t;
     }
 
-    static const Command* find(int input, boolean state);
+    boolean matches(int i, boolean o) {
+      if (input != i) {
+        return;
+      }
+      byte t = trigger;
+      if (t == cmdOn && !o) {
+        return false;
+      }
+      if (t == cmdOff && o) {
+        return false;
+      }
+      return true;
+    }
 
-    void execute();
+    static const Command* find(int input, byte trigger);
+
+    void execute(boolean keyPressed);
 
     boolean matches(const Command& c) {
-      return matches(c.input, c.on);
+      return matches(c.input, c.trigger);
     }
 
     void print(String& s);
 
 //    Command& operator =(const Command& other);
 };
+
+static_assert (sizeof(Command) <= 3, "Command too long");
 
 class NumberInput {
   public:

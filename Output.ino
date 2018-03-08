@@ -44,8 +44,8 @@ Processor::R OutputProcessor::processAction2(ExecutionState& state) {
 
   boolean newState;
   switch (data.fn) {
-    case OutputActionData::outOn:       newState = true; break;
-    case OutputActionData::outOff:      newState = false; break;
+    case OutputActionData::outOn:       newState = !state.invert; break;
+    case OutputActionData::outOff:      newState = state.invert; break;
     case OutputActionData::outToggle:   newState = !output.isSet(data.outputIndex); break;
   }
 
