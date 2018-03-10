@@ -164,6 +164,20 @@ void waitAndRefresh(int l, Servo& s1, Servo& s2) {
 #endif
 }
 
+void initServoFeedback(int pos, const ServoConfig& cfg) {
+  if (cfg.isEmpty()) {
+    return;
+  }
+  int out = cfg.output();
+  if (out < 0) {
+    return;
+  }
+  int l = cfg.left();
+  pos -= l;
+  bool b = (pos > -3) && (pos < 3);
+  output.setBit(out, b);
+}
+
 void startServos1To8() {
   Servo s1;
   Servo s2;
@@ -190,6 +204,7 @@ void startServos1To8() {
     }
     s1.write(pos1);
     s2.write(pos2);
+
     waitAndRefresh(100, s1, s2);
     // enable power
     int powerPin;
@@ -203,22 +218,15 @@ void startServos1To8() {
       Serial.print(F("Power on pin: ")); Serial.println(powerPin);
     }
 
-/*
-    int duty = 5000;
-    int pwr = 700;
-
-    for (; pwr < duty; pwr += 300) {
-      for (int count = 0; count < 20; count++) {
-          digitalWrite(powerPin, LOW);
-          delayMicroseconds(pwr);
-          digitalWrite(powerPin, HIGH);
-          delayMicroseconds(duty - pwr);
-      }
-    }
-*/
     // power up servo
     digitalWrite(powerPin, LOW);
     waitAndRefresh(200, s1, s2);
+
+    ServoConfig tmp;
+    tmp.load(index);
+    initServoFeedback(pos1, tmp);
+    tmp.load(index + 1);
+    initServoFeedback(pos2, tmp);
   }
 
   // detach from HW pins
