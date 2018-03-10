@@ -57,6 +57,10 @@ const byte servoSpeedTimes[] = {
    Servo speed is remembered in 100ms units
 */
 struct ServoConfig {
+  enum {
+    noOutput = 0x3f
+  };
+  
   static const byte servoPwmStep = 3;
   /**
      Left/first position, in servoPwmStep = 3 deg increments
@@ -83,11 +87,27 @@ struct ServoConfig {
 
   // the default is chosen so that it positions the servo at neutral position. 0 would mean to position at
   // one of the edge positions, which is not usually good for servos already built into a structure.
-  ServoConfig() : pwmFirst((90 / servoPwmStep)), pwmSecond((90 / servoPwmStep)), servoSpeed(0), statusOutput(0) {
+  ServoConfig() : pwmFirst((90 / servoPwmStep)), pwmSecond((90 / servoPwmStep)), servoSpeed(0), statusOutput(noOutput) {}
+  ServoConfig(int pwmL, int pwmR, int speed, int output) : servoSpeed(speed), statusOutput(output < 0 ? noOutput : output) {
+    setLeft(pwmL);
+    setRight(pwmR);
   }
 
   boolean isEmpty() {
     return (pwmFirst == (90 / servoPwmStep)) && (pwmSecond == (90 / servoPwmStep)) && (servoSpeed == 0);
+  }
+
+  int output() {
+    byte o = statusOutput;
+    return o == noOutput ? - 1 : o;
+  }
+
+  void setOutput(int o) {
+    if (o < 0 || o >= MAX_OUTPUT) {
+      statusOutput = noOutput;
+    } else {
+      statusOutput = o;
+    }
   }
 
   void setLeft(int l) {
@@ -112,21 +132,12 @@ struct ServoConfig {
   }
 
   int speed() {
-    if (isEmpty()) {
-      return 2;
-    }
     return servoSpeed;
   }
   int left() {
-    if (isEmpty()) {
-      return 90;
-    }
     return pwmFirst * servoPwmStep;
   }
   int right() {
-    if (isEmpty()) {
-      return 90;
-    }
     return pwmSecond * servoPwmStep;
   }
   int pos(bool dir) {
@@ -162,6 +173,14 @@ struct ServoConfig {
     s.concat(right());
     s.concat(':');
     s.concat(servoSpeed + 1);
+    int p = output();
+    if (p == -1) {
+      return;
+    }
+    s.concat("\nSFB:");
+    s.concat(id);
+    s.concat(':');
+    s.concat(p + 1);
   }
 
   // load data from EEPROM
@@ -606,12 +625,13 @@ class ServoProcessor : public Processor {
     byte servoIndex;
     byte targetAngle;
     byte servoSpeed;   // how many milliseconds should the servo command last before changing the angle;
-    long prevMillis;
+    long switchMillis;
     byte actionIndex;
     const Action* blockedAction;
     const ExecutionState* blockedState;
     byte targetPosCounter;
-
+    signed char servoOutput;
+    bool setOutputOn;
     byte pwmPin;
     unsigned long servoMask;
 

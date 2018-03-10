@@ -12,6 +12,13 @@ byte  servoPositions[MAX_SERVO];
 boolean enable = false;
 int overrideSpeed = -1;
 
+extern ServoConfig setupServoConfig;
+extern byte setupServoLeft;
+extern byte setupServoRight;
+extern byte setupServoSpeed;
+extern signed char setupServoOutput;
+
+
 void servoSetup() {
   pinMode(servoSelectA, OUTPUT);
   pinMode(servoSelectB, OUTPUT);
@@ -51,6 +58,7 @@ void servoSetup() {
   registerLineCommand("RNG", &rangeCommand);
   registerLineCommand("MOV", &moveCommand);
   registerLineCommand("CAL", &commandCalibrate);
+  registerLineCommand("SFB", &commandServoFeedback);
 
   Action::registerDumper(servo, printServoAction);
 }
@@ -257,11 +265,10 @@ void ServoProcessor::tick() {
   
   int curAngle = servoPositions[servoIndex]; // ctrl.read();
   int diff = servoSpeedTimes[servoSpeed];
-  long switchMillis = prevMillis + diff;
   if (currentMillis < switchMillis) {
     return;
   }
-  prevMillis = currentMillis;
+  switchMillis = currentMillis + diff;
   if (curAngle == targetAngle) {
     if (targetPosCounter < (switchMillis < 50 ? 10 : 3)) {
       targetPosCounter++;
@@ -278,7 +285,7 @@ void ServoProcessor::tick() {
     curAngle ++;
   }
   if (debugServo) {
-    Serial.print(servoIndex); Serial.print(":"); Serial.print(currentMillis); Serial.print(":"); Serial.print(switchMillis); Serial.print(":"); Serial.print(prevMillis); Serial.print(F(":\t Servo moving to ")); Serial.print(curAngle); Serial.print(F(", target = ")); Serial.println(targetAngle);
+    Serial.print(servoIndex); Serial.print(":"); Serial.print(currentMillis); Serial.print(F(":\t Servo moving to ")); Serial.print(curAngle); Serial.print(F(", target = ")); Serial.println(targetAngle);
   }
   ctrl.write(curAngle);
   // record the current state
@@ -307,6 +314,9 @@ void ServoProcessor::moveFinished() {
   }
   if (setupServoIndex < 0) {
     servoEEWrite();
+  }
+  if (servoOutput >= 0) {
+    output.setBit(servoOutput, setOutputOn);
   }
   if (blockedState != NULL) {
     executor.finishAction(*blockedState);
@@ -359,11 +369,21 @@ Processor::R ServoProcessor::processAction2(ExecutionState& state) {
       return ignored;
     }
   }
-  ServoConfig cfg;
+  int l, r, spd;
+  
   if (s == setupServoIndex) {
-    cfg = setupServoConfig;  
+    l = setupServoLeft;
+    r = setupServoRight;
+    spd = setupServoSpeed;
+    servoOutput = setupServoOutput;
   } else {
+    ServoConfig cfg;
     cfg.load(s);
+    
+    l = cfg.left();
+    r = cfg.right();
+    spd = cfg.speed();
+    servoOutput = cfg.output();
   }
   
   int target;
@@ -372,8 +392,13 @@ Processor::R ServoProcessor::processAction2(ExecutionState& state) {
     if (state.invert) {
       left = !left;
     }
-    target = left ? cfg.left() : cfg.right();
+    setOutputOn = left;
+    target = left ? l : r;
   } else {
+    setOutputOn = true;
+    if (servoOutput >= 0) {
+      output.setBit(servoOutput, false);
+    }
     target = data.targetPosition();
   }
   int curAngle = servoPositions[s];
@@ -381,17 +406,18 @@ Processor::R ServoProcessor::processAction2(ExecutionState& state) {
     Serial.print(s); Serial.print(F(": Action to move from ")); Serial.print(curAngle); Serial.print(F(", target = ")); Serial.println(target);
   }
   if (target == curAngle) {
-    clear();
+    moveFinished();
     return finished;
   }
   setupSelector(s);
   ctrl.attach(pwmPin);
   servoIndex = s;
   targetAngle = target;
-  prevMillis = currentMillis;
-  servoSpeed = overrideSpeed == -1 ? cfg.speed() : overrideSpeed;
+  int diff = servoSpeedTimes[servoSpeed];
+  switchMillis= currentMillis + diff;
+  servoSpeed = overrideSpeed == -1 ? spd : overrideSpeed;
   if (debugServo) {
-    Serial.print(F("Speed ")); Serial.print(servoSpeed); Serial.print(F(", millis = ")); Serial.print(servoSpeedTimes[servoSpeed]);
+    Serial.print(F("Speed ")); Serial.print(servoSpeed); Serial.print(F(", millis = ")); Serial.print(diff);
   }
   enable = true;
   ctrl.write(curAngle);

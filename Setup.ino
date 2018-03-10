@@ -46,8 +46,14 @@ void resetState() {
  */
 void enterSetup() {
   setupState = initialMenu;
-  setupServoConfig.clear();
+
+  // clear servo config
+  setupServoLeft = 90;
+  setupServoRight = 90;
+  setupServoSpeed = 2;
+  setupServoOutput = -1;
   setupServoIndex = -1;
+  
   if (charModeCallback != NULL) {
     // setup was invoked from terminal; reset terminal and disable setup
     setupActive = false;

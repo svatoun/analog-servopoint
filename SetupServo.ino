@@ -1,5 +1,8 @@
 
-ServoConfig setupServoConfig;
+byte setupServoLeft;
+byte setupServoRight;
+byte setupServoSpeed;
+signed char setupServoOutput;
 
 int lastSelectedNumber;
 int selectedNumber;
@@ -55,9 +58,9 @@ class InputServoSpeed : public NumberInput {
 
 int InputServoPos::getValue() {
   if (left) {
-    return setupServoConfig.left();
+    return setupServoLeft;
   } else {
-    return setupServoConfig.right();
+    return setupServoRight;
   }
 }
 
@@ -71,18 +74,18 @@ int InputServoPos::incValue(int v, int inc) {
 
 void InputServoPos::finished(int value) {
   if (left) {
-    Serial.print(F("Set left position to: ")); Serial.println(value);
-    setupServoConfig.setLeft(value);
+    Serial.print(F("LEFT: ")); Serial.println(value);
+    setupServoLeft = value;
     NumberInput::set(new InputServoPos(false));
     setupState = servoSetRight;
     numberInput->display();
-    Serial.print(F("Right pos = ")); Serial.println(numberInput->getValue());
+    Serial.print(F("Adj right: ")); Serial.println(numberInput->getValue());
   } else {
-    Serial.print(F("Set right position to: ")); Serial.println(value);
-    setupServoConfig.setRight(value);
+    Serial.print(F("RIGHT: ")); Serial.println(value);
+    setupServoRight = value;
     setupState = servoSetSpeed;
     NumberInput::set(new InputServoSpeed());
-    Serial.print(F("Speed = ")); Serial.println(numberInput->getValue() + 1);
+    Serial.print(F("Adj speed: ")); Serial.println(numberInput->getValue() + 1);
   }
 }
 
@@ -98,16 +101,20 @@ void startSetupServo(int value) {
     setupServoIndex = value;
     ServoConfig tmp;
     tmp.load(value);
-    setupServoConfig = tmp;
-    Serial.print(F("Configuring servo ")); Serial.println(setupServoIndex);
+    setupServoLeft = tmp.left();
+    setupServoRight = tmp.right();
+    setupServoSpeed = tmp.speed();
+    setupServoOutput = tmp.output();
+//    setupServoConfig = tmp;
+    Serial.print(F("Configuring ")); Serial.println(setupServoIndex);
     setupState = servoSetLeft;
     NumberInput::set(new InputServoPos(true));
     numberInput->display();
-    Serial.print(F("Left pos = ")); Serial.println(numberInput->getValue());
+    Serial.print(F("Adj left:")); Serial.println(numberInput->getValue());
 }
 
 void InputServoPos::displayCurrent(int selectedPos) {
-  Serial.print(F("Moving servo to: ")); Serial.println(selectedPos);
+  Serial.print(F("Pos: ")); Serial.println(selectedPos);
   clearNewCommand();
   Action a1;
   a1.asServoAction().move(setupServoIndex, selectedPos);
@@ -116,15 +123,16 @@ void InputServoPos::displayCurrent(int selectedPos) {
 }
 
 int InputServoSpeed::getValue() {
-  return setupServoConfig.speed();
+  return setupServoSpeed;
 }
 
 void InputServoSpeed::finished(int v) {
-  Serial.print(F("Setting speed ")); Serial.println(v);
-  setupServoConfig.setSpeed(v - 1);
+  Serial.print(F("SPEED: ")); Serial.println(v);
+  setupServoSpeed = v - 1;
   overrideSpeed = -1;
   // Persist in EEPROM
-  setupServoConfig.save(setupServoIndex);
+  ServoConfig tmp(setupServoLeft, setupServoRight, setupServoSpeed, setupServoOutput);
+  tmp.save(setupServoIndex);
   servoEEWriteSetup();
   enterSetup();
 }
@@ -363,12 +371,11 @@ void waveSelectedServo(int servoId) {
 }
 
 void rangeCommand(String& l) {
-  int index = nextNumber(l);
+  int index = servoNumber(l);
   int left = nextNumber(l);
   int right = nextNumber(l);
 
-  if (index < 1 || index > MAX_SERVO) {
-    Serial.println(F("\nInvalid servo index"));
+  if (index < 1) {
     return;
   }
   if (left < 0 || left > 180) {
@@ -403,19 +410,53 @@ void rangeCommand(String& l) {
   Serial.println(F("\nOK"));
 }
 
+int servoNumber(String& s) {
+  int index = nextNumber(s);
+  if (index < 0 || index > MAX_SERVO) {
+    Serial.print(F("Bad servo")); Serial.println(index);
+    return -1;
+  }
+  return index;
+}
+
+void commandServoFeedback(String& s) {
+  int index = servoNumber(s);
+  int out = nextNumber(s);
+  if (index < 0) {
+    return;
+  }
+  ServoConfig tmp;
+  tmp.load(index - 1);
+  if (out == -2 || out == 0) {
+    tmp.setOutput(-1);
+  } else if (out < 0 || out > MAX_OUTPUT) {
+    Serial.print(F("Bad output ")); Serial.println(out);
+    return;
+  } else {
+    tmp.setOutput(out - 1);
+  }
+  tmp.save(index - 1);
+  Serial.print(F("Servo ")); Serial.print(index); Serial.print(F(" output ")); Serial.println(out);
+}
+
 bool lastNewline;
 
 void commandCalibrate(String& s) {
-  int idx = nextNumber(s);
-  if (idx < 1 || idx > MAX_SERVO) {
-    Serial.print(F("Bad servo")); Serial.println(idx);
+  int idx = servoNumber(s);
+  if (idx < 1) {
+    Serial.print(F("Bad servo ")); 
+    if (idx >= 0) {
+      Serial.println(idx);
+    } else {
+      Serial.println();
+    }
     return;
   }
 
   setupActive = true;
-  Serial.print(F("Calibrate servo ")); Serial.println(idx);
+  Serial.print(F("Calibrate ")); Serial.println(idx);
   Serial.println(F("Use Q +, A -, ENTER/* = OK, SPACE/# = cancel"));
-  Serial.print(F("Set LEFT position"));
+  Serial.print(F("Set LEFT "));
   lastNewline = false;
   charModeCallback = &calibrateTerminalCallback;
   startSetupServo(idx - 1);  
