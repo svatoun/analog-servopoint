@@ -1,6 +1,14 @@
 
 ServoConfig setupServoConfig;
 
+int lastSelectedNumber;
+int selectedNumber;
+int typedNumber = -1;
+long lastTypedMillis;
+boolean shown;
+boolean wasCancel;
+byte digitCount;
+
 const int showSelectedServoTime = 2000;
 
 int setupServoIndex = -1;
@@ -18,7 +26,7 @@ class InputServoPos : public NumberInput {
   virtual int setValue(int v) override;
   virtual int incValue(int v, int inc) override;
   virtual void finished(int value) override;
-  virtual void displayCurrent(int typed, int selected) override;
+  virtual void displayCurrent(int selected) override;
 };
 
 
@@ -40,7 +48,7 @@ class InputServoSpeed : public NumberInput {
 
   virtual void finished(int speed) override;
   virtual void showIdle(int speed) override;
-  void displayCurrent(int typed, int selected) override;
+  void displayCurrent(int selected) override;
   void cancelled() override;
   int getValue() override;
 };
@@ -74,7 +82,7 @@ void InputServoPos::finished(int value) {
     setupServoConfig.setRight(value);
     setupState = servoSetSpeed;
     NumberInput::set(new InputServoSpeed());
-    Serial.print(F("Speed = ")); Serial.println(numberInput->getValue());
+    Serial.print(F("Speed = ")); Serial.println(numberInput->getValue() + 1);
   }
 }
 
@@ -88,6 +96,9 @@ void InputServoNumber::finished(int value) {
 
 void startSetupServo(int value) {
     setupServoIndex = value;
+    ServoConfig tmp;
+    tmp.load(value);
+    setupServoConfig = tmp;
     Serial.print(F("Configuring servo ")); Serial.println(setupServoIndex);
     setupState = servoSetLeft;
     NumberInput::set(new InputServoPos(true));
@@ -95,14 +106,11 @@ void startSetupServo(int value) {
     Serial.print(F("Left pos = ")); Serial.println(numberInput->getValue());
 }
 
-void InputServoPos::displayCurrent(int typed, int selectedPos) {
-  if (debugControl) {
-    Serial.print(F("Moving servo to: ")); Serial.println(selectedPos);
-  }
+void InputServoPos::displayCurrent(int selectedPos) {
+  Serial.print(F("Moving servo to: ")); Serial.println(selectedPos);
   clearNewCommand();
   Action a1;
   a1.asServoAction().move(setupServoIndex, selectedPos);
-  Serial.print(F("Action data: ")); Serial.println(a1.data);
   addNewCommand(a1);
   executor.playNewAction();
 }
@@ -125,7 +133,8 @@ void InputServoSpeed::cancelled() {
   overrideSpeed = -1;
 }
 
-void InputServoSpeed::displayCurrent(int typed, int n) {
+void InputServoSpeed::displayCurrent(int n) {
+  Serial.print(F("Speed: ")); Serial.println(n);
   overrideSpeed = n - 1;
 
   clearNewCommand();
@@ -141,7 +150,7 @@ void InputServoSpeed::displayCurrent(int typed, int n) {
 }
 
 void InputServoSpeed::showIdle(int n) {
-  displayCurrent(-1, n);
+  displayCurrent(n);
 }
 
 void enterSetupServo0() {
@@ -162,7 +171,7 @@ void enterSetupServo() {
 }
 
 void NumberInput::display() {
-  displayCurrent(-1, selectedNumber);
+  displayCurrent(selectedNumber);
 }
 
 void NumberInput::clear() {
@@ -193,27 +202,28 @@ int NumberInput::acceptTypedNumber() {
 
 void NumberInput::handleKeyPressed() {
   boolean prevCancel = wasCancel;
-  boolean ok;
+  boolean ok = true;
+  
+  wasCancel = currentKey == keychar_cancel;
   switch (currentKey) {
     case keychar_cancel:
       
       if (typedNumber != -1 || !prevCancel) {
-        Serial.print(F("Cancel pressed"));
+        Serial.print(F("Cancel pressed\n"));
         reset();
-        typedNumber = 1;
+        typedNumber = -1;
         selectedNumber = getValue();
         makeLedAck(&blinkLong[0]);
         lastTypedMillis = 0;
       } else {
         if (debugControl) {
-          Serial.print(F("Cancel number entry"));
+          Serial.print(F("Cancel number entry\n"));
         }
         numberInput = NULL;
         cancelled();
         return;
       }
-      wasCancel = true;
-      return;
+      break;
     case keychar_plus: {
       if (debugControl) {
         Serial.print(F("Number increased"));
@@ -253,8 +263,8 @@ void NumberInput::handleKeyPressed() {
         if (!acceptTypedNumber()) {
           return;
         }
+        break;
       }
-      typedNumber = -1;
       numberInput = NULL;
       finished(selectedNumber);
       return;
@@ -271,11 +281,17 @@ void NumberInput::handleKeyPressed() {
         maxDigits = 4;
       }
       if ((typedNumber < 0) && (currentKey == '0')) {
+        ok = false;
         break;
       }
-      if (typedNumber < 0 || digitCount >= maxDigits) {
+      if (typedNumber < 0) {
         typedNumber = 0;
         digitCount = 0;
+      } else if (digitCount >= maxDigits) {
+        typedNumber = -1;
+        ok = false;
+        Serial.print(F("Too many digits\n"));
+        break;
       }
       typedNumber = typedNumber * 10 + (currentKey - '0');
       if (typedNumber >= maxValue) {
@@ -290,7 +306,10 @@ void NumberInput::handleKeyPressed() {
     Serial.print(F("Selected number: ")); Serial.println(selectedNumber);
     Serial.print(F("Typed number: ")); Serial.println(typedNumber);
   }
-  displayCurrent(typedNumber, selectedNumber);
+  if (lastSelectedNumber != selectedNumber) {
+    displayCurrent(selectedNumber);
+    lastSelectedNumber = selectedNumber;
+  }
 }
 
 void NumberInput::handleIdle() {
@@ -384,6 +403,7 @@ void rangeCommand(String& l) {
   Serial.println(F("\nOK"));
 }
 
+bool lastNewline;
 
 void commandCalibrate(String& s) {
   int idx = nextNumber(s);
@@ -396,18 +416,27 @@ void commandCalibrate(String& s) {
   Serial.print(F("Calibrate servo ")); Serial.println(idx);
   Serial.println(F("Use Q +, A -, ENTER/* = OK, SPACE/# = cancel"));
   Serial.print(F("Set LEFT position"));
+  lastNewline = false;
   charModeCallback = &calibrateTerminalCallback;
   startSetupServo(idx - 1);  
 }
 
 void calibrateTerminalCallback(char c) {
   char tr;
+  boolean wasNewline = lastNewline;
 
+  lastNewline = false;
   switch (c) {
     case 'q': case 'Q': tr = '+'; break;
     case 'a': case 'A': tr = '-'; break;
-    case '\n': case '\r': tr = '*'; break;
-    case ' ': tr = '#'; break;
+    case '\r': case '\n': {
+      if (!wasNewline) {
+        tr = '*'; 
+      }
+      lastNewline = true;
+      break;
+    }
+    case 0x7f: case 0x1b: case ' ': tr = '#'; break;
 
     default:
       tr = c;

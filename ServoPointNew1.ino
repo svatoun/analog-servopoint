@@ -1,6 +1,7 @@
 
-#define SOFTWARE_SERVO
+#undef SOFTWARE_SERVO
 
+#define DEBUG
 
 #include <EEPROM.h>
 #include "Key2.h"
@@ -285,26 +286,18 @@ boolean eeBlockRead(byte magic, int eeaddr, void* address, int size) {
 long lastOnePressed = 0;
 int onePressedCount = 0;
 
-boolean isPressed(int button) {
-  return keypad.isPressedKey(button) || keypad.isHeldKey(button);
+bool setKeyPressed(int k, bool val) {
+  byte o = k >> 3;
+  byte mask = 0xfe << (k & 0x07);
+  state[o] = (state[o] & mask);
+  if (val) {
+    state[o] |= (~mask);
+  }
 }
 
 void processKey(int k, boolean pressed) {
-  const Command* cmd = Command::find(k, pressed);
-  if (cmd == NULL) {
-    if (debugInput) {
-      Serial.println(F("No command found"));
-    }
-    return;
-  }
-  if (debugInput) {
-    Serial.print(F("Found command:" ));  Serial.print((int)cmd, HEX);
-    Serial.print(" ");
-    String s;
-    cmd->print(s);
-    Serial.println(s);
-  }
-  cmd->execute(pressed);
+  setKeyPressed(k, pressed);
+  Command::processAll(k, pressed);
 }
 
 
@@ -364,35 +357,36 @@ void saveHandler(String& l) {
   ModuleChain::invokeAll(ModuleCmd::eepromSave);
 }
 
-int defineCommand(const Command& def) {
-  for (int i = 0; i < MAX_COMMANDS; i++) {
-    Command& c = commands[i];
-    if (c.matches(def)) {
+int defineCommand(const Command& def, int no) {
+  if (no >= 0) {
+    if (no >= MAX_COMMANDS) {
+      return -1;
+    }
+  } else {
+    for (int i = 0; i < MAX_COMMANDS; i++) {
+      Command& c = commands[i];
+      if (c.available()) {
+        no = i;
+        break;
+      }
+    }
+  }
+  if (no == -1) {
+    if (debugCommands) {
+      Serial.println(F("No free slots"));
+    }
+    return -1;
+  }
+  Command& c = commands[no];
+  if (!c.available()) {
       if (debugCommands) {
-        Serial.print(F("Found matching command ")); Serial.println(i);
+        Serial.print(F("Found matching command ")); Serial.println(no);
       }
       replaceCommand(c, def);
-      return i;
-    }
-    if (c.available()) {
-      if (debugCommands) {
-        Serial.print(F("Found free slot: ")); Serial.println(i);
-      }
-      return defineNewCommand(def, c);
-    }
-    if (debugCommands) {
-      Serial.print(F("Skipping: "));
-      String s;
-      c.print(s);
-      Serial.print(s);
-      Serial.print(' ');
-      Serial.println(c.actionIndex);
-    }
-  }
-  if (debugCommands) {
-    Serial.println(F("No free slots"));
-  }
-  return -1;
+      return no;
+  } else {
+    return defineNewCommand(def, c);
+  }  
 }
 
 int defineNewCommand(const Command& c, Command& target) {

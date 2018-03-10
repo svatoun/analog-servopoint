@@ -96,7 +96,8 @@ void Command::execute(boolean keyPressed) {
   if (available()) {
     return;
   }
-  switch (trigger) {
+  int t = trigger;
+  switch (t) {
     case cmdOn:
       if (!keyPressed) {
         break;
@@ -127,31 +128,103 @@ void Command::execute(boolean keyPressed) {
 //  executor.schedule(Action::getRef(actionIndex));
 }
 
-const Command* Command::find(int input, byte t) {
+bool Command::processAll(int input, boolean state) {
+  bool found = false;
+  const Command* last = NULL;
+  while (true) {
+    const Command *c = Command::find(input, state, last);
+    if (c == NULL) {
+      if (!found) {
+        Serial.println(F("Unhandled input/state"));
+        return false;
+      } else {
+        if (debugInfra) {
+          Serial.println(F("No more commands found"));
+        }
+      }
+      return true;
+    }
+    if (debugInput) {
+      Serial.print(F("Found command:" ));  Serial.print((int)c, HEX);
+      Serial.print(" ");
+      String s;
+      c->print(s);
+      Serial.println(s);
+    }
+    c->execute(state);
+    last = c;
+  }
+}
+
+int Command::findFree() {
+  const Command* c = commands;
   for (int i = 0; i < MAX_COMMANDS; i++) {
-    Command& c = commands[i];
+    if (c->available()) {
+      return i;
+    }
+    c++;
+  }
+  return -1;
+}
+
+const Command* Command::find(int input, boolean state, const Command* from) {
+  if (from == NULL) {
+    from = commands;
+  } else {
+    from++;
+  }
+  int i = -1;
+  while (from < (commands + MAX_COMMANDS)) {
+    ++i;
+    const Command& c = *from;
     if (c.available()) {
-      return NULL;
+      from++;
+      continue;
     }
-    if (c.input == input && c.trigger == t) {
-      return &c;
+    if (c.input == input) {
+        boolean ok;
+        byte t = c.trigger;
+        Serial.println(t);
+        switch (t) {
+            case cmdOff:
+                ok = (state == false);
+                break;
+            case cmdOn:
+            case cmdOnReverts:
+                ok = state;
+                break;
+            case cmdToggle:
+            case cmdOnCancel:
+            case cmdOffReverts:
+                ok = true;
+                break;
+            default:
+                ok = false;
+        }
+        if (ok) {
+            if (debugInput) {
+              String s;
+              Serial.print(F("Found: "));
+              c.print(s);
+              Serial.println(s);
+            }
+            return &c;
+        }
     }
+    from++;
   }
   return NULL;
 }
 
+char triggerChars[] = { 'C', 'O', 'T', 'A', 'B', 'R', 'E', 'E' };
+
 void Command::print(String& s) {
   s += F("DEF:");
-  s += input;
-  char t;
-  switch (trigger) {
-    case cmdOn:         t = 'C'; break;
-    case cmdOff:        t = 'O'; break;
-    case cmdToggle:     t = 'T'; break;
-    case cmdOnCancel:   t = 'A'; break;
-    case cmOnReverts:   t = 'B'; break;
-    case cmdOffReverts: t = 'R'; break;
-  }
+  s += (id + 1);
+  s += F(":");
+  s += (input + 1);
+  s += F(":");
+  char t = triggerChars[trigger];
   s += t;
   if (!wait) {
     s += F(":N");

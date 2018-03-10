@@ -34,14 +34,6 @@ Action& Action::get(int index, Action& target) {
   return target;
 }
 
-/*
-Action::Action(const Action& other) {
-  last = other.last;
-  command = other.command;
-  data = other.data;
-}
-*/
-
 void Action::initialize() {
   for (int cbIndex = 0; cbIndex < sizeof(renumberCallbacks) / sizeof(renumberCallbacks[0]); cbIndex++) {
     renumberCallbacks[cbIndex] = NULL;
@@ -181,10 +173,7 @@ bool ActionRef::isEmpty() {
   if (index == noIndex) {
     return true;
   }
-  if (index == tempIndex) {
-    if (ptr == NULL) {
-      return true;
-    }
+  if (ptr != NULL) {
     return ptr->isEmpty();
   } else {
     return ((index >= MAX_ACTIONS) || current.isEmpty());
@@ -212,7 +201,7 @@ const Action& ActionRef::skip() {
 const Action& ActionRef::next() {
   if (index == noIndex) {
     if (!current.isEmpty()) {
-      current = noAction;
+      clear();
     }
     return current;    
   } 
@@ -221,7 +210,7 @@ const Action& ActionRef::next() {
     clear();
     return current;
   }
-  if (index == tempIndex) {
+  if (ptr != NULL) {
     ptr++;
     current = *ptr;
   } else {
@@ -239,9 +228,10 @@ void ActionRef::free() {
       Serial.print(F("Free action #")); Serial.println(i(), HEX);
     }
     if (index == noIndex) {
+      clear();
       return;
     }
-    if (index == tempIndex) {
+    if (ptr != NULL) {
       // use pointer
       ptr->init();
     } else {
@@ -269,7 +259,10 @@ void ActionRef::free() {
 }
 
 void ActionRef::save() {
-  if (index >= tempIndex) {
+  if (ptr != NULL) {
+    return;
+  }
+  if (index >= MAX_ACTIONS) {
     return;
   }
   current.save(index);

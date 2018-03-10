@@ -7,6 +7,7 @@ void (* charModeCallback)(char);
 boolean interactive = true;
 int8_t commandDef = -1;
 Command definedCommand;
+int commandNo = -1;
 
 const int maxLineCommands = 30;
 
@@ -150,6 +151,10 @@ int nextNumber(String& input) {
     return -2;
   }
   int e = input.indexOf(':');
+  if (e == 0) {
+    input.remove(0, 1);
+    return -3;
+  }
   char c = input.charAt(0);
   if (c < '0' || c > '9') {
     return -1;
@@ -255,23 +260,44 @@ void commandDump(String& s) {
 }
 
 void commandDefine(String& s) {
+  int no = nextNumber(s);
+  if (no == -3) {
+    no = Command::findFree();
+    if (no < 0) {
+      Serial.println(F("\nNo free slots"));
+      return;
+    }
+  } else {
+    no--; 
+  }
+  if (no < 0 || no >= MAX_COMMANDS) {
+    Serial.println(F("\nBad command ID"));
+    return;
+  }
+  commandNo = no;
   int btn = nextNumber(s);
-  if (btn == -1 || btn > MAX_INPUT_BUTTONS) {
+  if (btn < 1 || btn > MAX_INPUT_BUTTONS) {
     Serial.println(F("\nBad button"));
     return;
   }
-  boolean state = true;
+  btn--;
+  byte trigger = Command::cmdOn;
   
   if (s.length() > 0) {
+
     switch (s.charAt(0)) {
-      case '+': case 'U': case 'u': case '1':
-        state = true;
+      case 'C': case 'c': case 'D': case 'd': case '1': case '+':
+        trigger = Command::cmdOn;
         break;
-      case '-': case 'D': case 'd': case '0':
-        state = false;
+      case 'O': case 'o': case 'U': case 'u': case '0': case '-':
+        trigger = Command::cmdOff;
         break;
+      case 'T': case 't': trigger = Command::cmdToggle; break;
+      case 'A': case 'a': trigger = Command::cmdOnCancel; break;
+      case 'B': case 'b': trigger = Command::cmdOnReverts; break;
+      case 'R': case 'r': trigger = Command::cmdOffReverts; break;
       default:
-        Serial.println(F("Bad state"));
+        Serial.println(F("Bad trigger"));
         return;
     }
     if (s.length() > 1) {
@@ -291,8 +317,13 @@ void commandDefine(String& s) {
       s.remove(0,s.length() > 1 ? 2 : 1);
     }
   }
-  Command c(btn, state, wait);
+  Command c(btn, trigger, wait);
   definedCommand = c;
+  definedCommand.id = no;
+
+  String e;
+  c.print(e);
+  Serial.println(e);
   commandDef = 0;
   if (interactive) {
     Serial.println(); Serial.print(commandDef + 1); Serial.println(F(":>"));
@@ -305,7 +336,7 @@ void commandFinish(String& s) {
     resetTerminal();
   }
 
-  int idx = defineCommand(definedCommand);
+  int idx = defineCommand(definedCommand, commandNo);
   if (interactive) {
     Serial.print(F("Defined command #")); Serial.println(idx);
     Serial.print(F("Free RAM: ")); Serial.println(freeRam());
@@ -326,27 +357,27 @@ void commandClear(String& s) {
 
 void commandExecute(String& s) {
   int cmd = nextNumber(s);
-  if (cmd < 1 || cmd > maxId) {
-    Serial.println(F("Bad command"));
-  }
-  boolean state = true;
-  if (s.length() > 0) {
-    switch (s.charAt(0)) {
-      case 'D': case 'd': case '0': case '-':
-        state = false;
-        break;
-      case 'U': case 'u': case '1': case '+':
-        state = true;
-        break;
-    }
-  }
-  Command *c = Command::find(cmd, state);
-  if (c == NULL) {
-    Serial.println(F("Unhandled input/state"));
+  if (cmd < 1 || cmd >= MAX_INPUT_BUTTONS) {
+    Serial.println(F("Bad input"));
     return;
   }
-  c->execute(state);
-  
+  boolean state = true;
+  cmd--;
+  if (s.length() > 0) {
+    switch (s.charAt(0)) {
+      case 'C': case 'c': case 'D': case 'd': case '1': case '+':
+        state = true;
+        break;
+      case 'O': case 'o': case 'U': case 'u': case '0': case '-':
+        state = false;
+        break;
+      default:
+        Serial.println(F("Bad trigger"));
+        return;
+    }
+  }
+  setKeyPressed(cmd, state);
+  Command::processAll(cmd, state);
 }
 
 void commandDumpEEProm(String& s) {

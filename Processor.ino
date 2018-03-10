@@ -156,10 +156,6 @@ void Executor::handleWait(Action* a) {
   
 }
 
-//void Executor::schedule(const ActionRef& a) {
-//  schedule(a, 0, false);  
-//}
-
 void Executor::schedule(const ActionRef& ref, int id, boolean invert) {
   if (debugExecutor) {
     Serial.print(F("Scheduling action: ")); Serial.println((int)ref.i(), HEX);
@@ -231,7 +227,6 @@ void block(ExecutionState& q, Processor* proc) {
   q.blocked = true;
   q.processor = proc;
 }
-
 
 void Executor::process() {
   for (int px = 0; px < MAX_PROCESSORS; px++) {

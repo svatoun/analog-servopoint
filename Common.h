@@ -12,6 +12,15 @@ bool setupActive = false;
 
 char pressedKey;
 
+extern byte state[];
+
+bool isKeyPressed(int k) {
+  byte o = k >> 3;
+  return state[o] & (1 << (k & 0x07));
+}
+
+bool setKeyPressed(int k, boolean s);
+
 enum Instr {
   none = 0,
   servo,         // 1  control a servo
@@ -37,6 +46,7 @@ struct WaitActionData;
 const byte servoSpeedTimes[] = {
 //  5, 10, 15, 20,
 //  30, 40, 50, 60
+
   5, 10, 20, 30, 
   50, 70, 100, 120
 };
@@ -269,16 +279,14 @@ public:
   ActionRef(const Action* aPtr) : 
     index(aPtr == NULL ? noIndex : tempIndex), 
     current(aPtr == NULL ? noAction : *aPtr),
-    ptr(aPtr) {
-      Serial.print("Loading action @"); Serial.print((int)&current, HEX); Serial.print(" from "); Serial.println((int)aPtr, HEX);
-  };
-  boolean isPersistent() { return index < tempIndex; };
+    ptr(aPtr) {};
+  boolean isPersistent() { return ptr == NULL; };
   void clear();
   const Action& skip();
   const Action& next();
   const Action& a() { return current; };
   const Action* aptr() { return &current; };
-  int i() { return index == tempIndex ? (int)ptr : index; };
+  int i() { return !isPersistent() ? (int)ptr : index; };
   boolean isEmpty();
   boolean isLast() { return isEmpty() || current.isLast(); };
 
@@ -521,10 +529,10 @@ class Processor {
 };
 
 struct ExecutionState {
-  int id : 5;           // command ID ?
-  boolean blocked : 1;  // if the execution is blocked
-  boolean wait : 1;
-  boolean invert : 1;
+  byte    id;       // command ID ?
+  boolean blocked;  // if the execution is blocked
+  boolean wait;
+  boolean invert;
   // 1 bits remains
   
   ActionRef  action; // the current executing action
@@ -543,7 +551,7 @@ struct ExecutionState {
     action.clear();
   }
 };
-static_assert (sizeof(ExecutionState) < 15, "Execution state too large");
+static_assert (sizeof(ExecutionState) < 20, "Execution state too large");
 
 class Executor {
     Processor*  processors[MAX_PROCESSORS];
@@ -691,26 +699,24 @@ struct Command {
     };
 
     enum {
-      cmdOn,          // triggers on switch ON
+      cmdOn = 0x00,   // triggers on switch ON
       cmdOff,         // triggers on switch OFF
       cmdToggle,      // triggers on switch toggle
       cmdOnCancel,    // ON will start the action, OFF will cancel command
       cmdOffReverts,  // ON will start, OFF will revert
-      cmOnReverts     // next ON will revert the command
+      cmdOnReverts     // next ON will revert the command
     };
     
     byte    input : 5;        // up to 32 inputs, e.g. 8 * 4
     byte    trigger : 3;      // trigger function
     boolean wait:   1;        // wait on action to finish before next one
     byte    actionIndex :  8; // max 255 actions allowed
-    byte    id :    5;        // command Id
-    
-    // 22 bits
+    byte    id :    6;
+
+    // 5 + 3 + 1 + 8 + 6= 8 + 9 + 6 = 17 + 6 = 23 bits
   public:
     Command() : input(0), actionIndex(noAction), trigger(cmdOff), wait(true) {}
-    Command(int aI, boolean aO, boolean aW, int aN) : input(aI), trigger(aO ? cmdOn : cmdOff), wait(aW), actionIndex(aN) {}
-    Command(int aI, boolean aO, boolean aW) : input(aI), trigger(aO ? cmdOn : cmdOff), wait(aW), actionIndex(0xff) {}
-//    Command(const Command& copy) : input(copy.input), on(copy.on), wait(copy.wait), actionIndex(copy.actionIndex) {}
+    Command(int aI, byte aT, bool aW) : input(aI), actionIndex(noAction), trigger(aT), wait(aW) {}
 
     boolean available() {
       return actionIndex > MAX_ACTIONS;
@@ -726,6 +732,7 @@ struct Command {
       return input == i && trigger == t;
     }
 
+/*
     boolean matches(int i, boolean o) {
       if (input != i) {
         return;
@@ -739,14 +746,13 @@ struct Command {
       }
       return true;
     }
-
-    static const Command* find(int input, byte trigger);
+*/
+    static const Command* find(int input, boolean state, const Command* from);
+    static bool processAll(int input, boolean state);
 
     void execute(boolean keyPressed);
 
-    boolean matches(const Command& c) {
-      return matches(c.input, c.trigger);
-    }
+    static int findFree();
 
     void print(String& s);
 
@@ -755,19 +761,27 @@ struct Command {
 
 static_assert (sizeof(Command) <= 3, "Command too long");
 
+extern int selectedNumber;
+extern int lastSelectedNumber;
+extern int typedNumber;
+extern long lastTypedMillis;
+extern boolean shown;
+extern boolean wasCancel;
+extern byte digitCount;
+
 class NumberInput {
   public:
     const int minValue;
     const int maxValue;
-
-    int selectedNumber;
-    int typedNumber = -1;
-    long lastTypedMillis;
-    boolean shown : 1;
-    boolean wasCancel : 1;
-    byte digitCount : 3;
   public:
-    NumberInput(int aMin, int aMax) : minValue(aMin), maxValue(aMax), selectedNumber(aMin), lastTypedMillis(0), shown(false), wasCancel(false), digitCount(0) {}
+    NumberInput(int aMin, int aMax) : minValue(aMin), maxValue(aMax) {
+      selectedNumber = aMin;
+      lastTypedMillis = 0;
+      shown = false;
+      wasCancel = false;
+      digitCount = 0;
+      lastSelectedNumber = aMin - 1;
+    }
 
     void handleKeyPressed();
     void handleIdle();
@@ -786,7 +800,7 @@ class NumberInput {
     virtual void  finished(int) {}
     virtual void  cancelled();
     virtual void  showIdle(int) {}
-    virtual void displayCurrent(int, int) {}
+    virtual void displayCurrent(int) {}
     void display();
 
     static void set(NumberInput* input);
