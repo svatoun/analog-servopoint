@@ -61,9 +61,11 @@ const int MAX_ACTIONS = 128;        // # of possible actions
 const int MAX_COMMANDS = 32;        // # of defined commands
 const int MAX_WAIT_COUNT = 10;      // # of suspended executions
 const int MAX_SERVO = 16;           // # of controlled servos
-const int MAX_OUTPUT = 8;          // # of on/off outputs from the shift register
+const int MAX_OUTPUT = 64;          // # of on/off outputs from the shift register
 const int MAX_INPUT_BUTTONS = 16;   // # of input buttons
 const int MAX_SPEED = 8;            // servo speed
+
+const int MAX_SCHEDULED_ITEMS = 16;
 
 const int OUTPUT_BIT_SIZE = (MAX_OUTPUT + 7) / 8;
 
@@ -84,16 +86,18 @@ const int outputBase = 8;
 #ifdef DEBUG
 const int debugControl = 0;
 const int debugExecutor = 0;
-const int debugServo = 0;
+const int debugServo = 1;
+const int debugServoMove = 1;
 const int debugOutput = 0;
 const int debugCommands = 0;
-const int debugInfra = 1;
+const int debugInfra = 0;
 const int debugInput = 0;
 const int debugPower = 0;
 #else
 const int debugControl = 0;
 const int debugExecutor = 0;
 const int debugServo = 0;
+const int debugServoMove = 0;
 const int debugOutput = 0;
 const int debugCommands = 0;
 const int debugInfra = 0;

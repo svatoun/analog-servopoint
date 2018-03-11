@@ -9,13 +9,13 @@ int8_t commandDef = -1;
 Command definedCommand;
 int commandNo = -1;
 
-const int maxLineCommands = 30;
+const int maxLineCommands = 40;
 
 LineCommand lineCommands[maxLineCommands];
 
 void setupTerminal() {
   line.reserve(MAX_LINE);
-  registerLineCommand("HLP", &commandHelp);
+//  registerLineCommand("HLP", &commandHelp);
   registerLineCommand("ECH", &commandInteractive);
   registerLineCommand("RST", &commandReset);
   registerLineCommand("BCK", &commandBack);
@@ -27,9 +27,11 @@ void setupTerminal() {
   registerLineCommand("INF", &commandStatus);
   registerLineCommand("EXE", &commandExecute);
   registerLineCommand("EED", &commandDumpEEProm);
+  registerLineCommand("DEL", &commandDelete);
   resetTerminal();
 }
 
+/*
 void commandHelp(String&s) {
   Serial.println(F("HELP - Available commands:"));
   for (int i = 0; i < maxLineCommands; i++) {
@@ -40,6 +42,7 @@ void commandHelp(String&s) {
     Serial.println(c.cmd);
   }
 }
+*/
 
 void terminalModuleHadler(ModuleCmd cmd) {
   switch (cmd) {
@@ -345,6 +348,20 @@ void commandFinish(String& s) {
   resetTerminal();
 }
 
+void commandDelete(String& s) {
+  int no = nextNumber(s);
+  if (no < 1 || no > MAX_COMMANDS) {
+    Serial.println(F("Bad command"));
+    return;
+  }
+  bool result = deleteCommand(no - 1);
+  Serial.print(F("Delete ")); Serial.print(no);
+  if (result) {
+    Serial.println(": OK");
+  } else {
+    Serial.println(": NOP");
+  }
+}
 void commandStatus(String& s) {
   ModuleChain::invokeAll(ModuleCmd::status);
 }

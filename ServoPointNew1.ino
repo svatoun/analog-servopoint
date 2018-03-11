@@ -341,6 +341,7 @@ void loop() {
   if (setupActive) {
     setupLoop();
   }
+  scheduler.schedulerTick();
   handleAckLed();
   executor.process();
   ModuleChain::invokeAll(ModuleCmd::periodic);
@@ -420,6 +421,18 @@ int defineNewCommand(const Command& c, Command& target) {
   target = c;
   target.actionIndex = aIndex;
   return &target - commands;
+}
+
+boolean deleteCommand(int i) {
+  if (i < 0 || i >= MAX_COMMANDS) {
+    return false;
+  }
+  Command &c = commands[i];
+  if (c.available()) {
+    return false;
+  }
+  c.free();
+  return true;
 }
 
 void replaceCommand(Command& c, const Command& def) {
