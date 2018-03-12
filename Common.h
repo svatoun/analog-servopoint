@@ -161,7 +161,7 @@ struct ServoConfig {
   void clear() {
     pwmFirst = pwmSecond = (90 / servoPwmStep);
     servoSpeed = 0;
-    statusOutput = 0;
+    statusOutput = noOutput;
   }
 
   void print(int id, String& s) {
