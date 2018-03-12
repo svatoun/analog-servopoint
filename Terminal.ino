@@ -27,6 +27,7 @@ void setupTerminal() {
   registerLineCommand("INF", &commandStatus);
   registerLineCommand("EXE", &commandExecute);
   registerLineCommand("EED", &commandDumpEEProm);
+  registerLineCommand("PLA", &commandPlay);
   resetTerminal();
 }
 
@@ -402,5 +403,84 @@ void commandDumpEEProm(String& s) {
     }
   }
   Serial.println(line);
+}
+
+enum PlayMode {
+    playServo = 0,
+    playOutput,
+    playCommand,
+
+    playEnd
+};
+
+byte playMode;
+
+void commandPlay(String& s) {
+  playMode = playServo;
+  charModeCallback = &playCharacterCallback;
+}
+
+void playCharacterCallback(char c) {
+  bool shift = false;
+  if (c >= 'a' && c <= 'z') {
+    shift = true;
+    c -= ('a' - 'A');
+  }
+  switch (c) {
+    case '1':
+      Serial.println(F("\nServo mode"));
+      playMode = servo;
+      return;
+    case '2':
+      Serial.println(F("\nOutput mode"));
+      playMode = servo;
+      return;
+    case '3':
+      Serial.println(F("\nCommand mode"));
+      playMode = servo;
+      return;
+    case '\r':
+    case ' ':
+    case '.':
+      Serial.println(F("\nExit"));
+      charModeCallback = NULL;
+      return;
+  }
+  if (c >= 'A' && c <= 'Z') {
+    int n = c - 'A';
+    Action a;
+    Serial.print('\b');
+    switch (playMode) {
+      case playServo: {
+        if (n >= MAX_SERVO) {
+          return;
+        }
+        ServoActionData &d = a.asServoAction();
+        if (shift) {
+          d.moveRight(n);
+        } else {
+          d.moveLeft(n);
+        }
+        break;
+      }
+      case playOutput: {
+        if (n >= MAX_OUTPUT) {
+          return;
+        }
+        OutputActionData& outAction = a.asOutputAction();
+        if (shift) {
+          outAction.turnOff(n);
+        } else {
+          outAction.turnOn(n);
+        }
+        break;
+      }
+      default:
+        return;
+    }
+    prepareCommand();
+    addNewCommand(a);
+    executor.playNewAction();
+  }
 }
 

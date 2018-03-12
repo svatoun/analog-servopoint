@@ -1,7 +1,7 @@
 
 #undef SOFTWARE_SERVO
 
-#define DEBUG
+#undef DEBUG
 
 #include <EEPROM.h>
 #include "Key2.h"
