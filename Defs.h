@@ -84,11 +84,11 @@ const int outputBase = 8;
 #ifdef DEBUG
 const int debugControl = 0;
 const int debugExecutor = 1;
-const int debugServo = 1;
+const int debugServo = 0;
 const int debugOutput = 0;
 const int debugCommands = 0;
-const int debugInfra = 1;
-const int debugInput = 0;
+const int debugInfra = 0;
+const int debugInput = 1;
 const int debugPower = 0;
 #else
 const int debugControl = 0;

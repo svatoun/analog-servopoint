@@ -724,9 +724,10 @@ struct Command {
       cmdToggle,      // triggers on switch toggle
       cmdOnCancel,    // ON will start the action, OFF will cancel command
       cmdOffReverts,  // ON will start, OFF will revert
-      cmdOnReverts     // next ON will revert the command
+      cmdOnReverts,    // next ON will revert the command
+      cmdOffCancel,    // ON will start the action, OFF will cancel command
     };
-    
+
     byte    input : 5;        // up to 32 inputs, e.g. 8 * 4
     byte    trigger : 3;      // trigger function
     boolean wait:   1;        // wait on action to finish before next one
