@@ -1,7 +1,7 @@
 
 ModuleChain outputModule("Output", 0, &outputModuleHandler);
 
-class OutputProcessor : public Processor {
+class OutputProcessor : public Processor, public ScheduledProcessor {
 
   public:
     OuputProcessor() {
@@ -10,6 +10,7 @@ class OutputProcessor : public Processor {
     R processAction(const Action& ac, int handle) {
       return Processor::ignored;
     }
+    void timeout(unsigned int data) override;
     void tick() override;
     void clear() override;
     boolean cancel(const Action& ac) override;
@@ -25,6 +26,17 @@ void OutputProcessor::clear() {
   
 }
 
+#define OUTPUT_MASK 0x3f
+
+void OutputProcessor::timeout(unsigned int data) {
+  byte kind = (data >> 8) & 0xff;
+  if (kind == 0) {
+    // pulse, low bits is the output bit
+    int b = data & OUTPUT_MASK;
+    output.setBit(b, false);
+  }
+}
+
 boolean OutputProcessor::cancel(const Action& a) {
   if (a.command == onOff) {
     OutputActionData& data = a.asOutputAction();
@@ -35,23 +47,38 @@ boolean OutputProcessor::cancel(const Action& a) {
 }
 
 Processor::R OutputProcessor::processAction2(ExecutionState& state) {
-  const Action* a = state.action.aptr();
-  if (a->command != onOff) {
+  const Action& a = *state.action.aptr();
+  byte cmd = a.command;
+  
+  if (cmd != onOff) {
     return Processor::ignored;
   }
 
-  const OutputActionData& data = a->asOutputAction();
-
+  const OutputActionData& data = a.asOutputAction();
+  byte fn = data.fn;
   boolean newState;
-  switch (data.fn) {
+  byte outN = data.outputIndex;
+  
+  switch (fn) {
+    case OutputActionData::outPulse:   
+      {
+        int d = data.pulseDelay();
+        if (d == 0) {
+          d = 6;
+        }
+        scheduler.schedule(d, this, outN & OUTPUT_MASK);
+      }
+      // fall through
     case OutputActionData::outOn:       newState = !state.invert; break;
     case OutputActionData::outOff:      newState = state.invert; break;
     case OutputActionData::outToggle:   newState = !output.isSet(data.outputIndex); break;
   }
 
-  output.setBit(data.outputIndex, newState);
+  output.setBit(outN, newState);
   return Processor::finished;
 }
+
+static_assert (MAX_OUTPUT <= (OUTPUT_MASK + 1), "Maximum outputs too high");
 
 void printHexByte(String& buffer, int val) {
   if (val < 0x10) {
@@ -88,8 +115,25 @@ void outputCommand(String& s) {
       case '*': case 'T': case 't': 
         outAction.toggle(n);
         break;
+      case 'P': case 'p':
+        outAction.pulse(n);
+        if (s.charAt(1) == ':') {
+          s.remove(0, 2);
+          int d = nextNumber(s);
+          if (d < 1 | d > 5000) {
+            Serial.println(F("Bad pulse"));
+            return;
+          }
+          d = d / 50;
+          if (d == 0) {
+            d++;
+          }
+          outAction.setDelay(d);
+        }
+        break;
       default:
-        Serial.println(F("Bad output command"));
+        Serial.println(F("Bad fn"));
+        return;
     }
   }
   prepareCommand();

@@ -205,7 +205,7 @@ struct Action {
     byte  last    :   1;    // flag, last action
     byte  command :   3;    // instruction
 
-    unsigned int data : 12; // action type-specific data
+    unsigned int data : 20; // action type-specific data
 
 //    static Action actionTable[MAX_ACTIONS];
     static ActionRenumberFunc renumberCallbacks[];
@@ -396,11 +396,13 @@ struct OutputActionData {
         outOff,
         outToggle,
         outPulse,
+        outFlash,
 
         outError
     };
-    OutputFunction  fn : 2;    // output function style
-    byte  outputIndex : 5;    // up to 32 outputs
+    OutputFunction  fn : 3;    // output function style
+    byte  outputIndex : 6;    // up to 32 outputs
+    byte  pulseLen : 8;
 
   public:
     void  turnOn(int output) {
@@ -421,6 +423,21 @@ struct OutputActionData {
       outputIndex = output;
     }
 
+    void pulse(int output) {
+      command = onOff;
+      fn = outPulse;
+      outputIndex = output;
+      pulseLen = 0;
+    }
+
+    int pulseDelay() {
+      return pulseLen;
+    }
+
+    void setDelay(int d) {
+      pulseLen = d;
+    }
+
     boolean isOn();
 
     int output() {
@@ -437,8 +454,8 @@ struct OutputActionData {
       }
     }
 };
-static_assert (OutputActionData::outError <= 4, "Too many output functions");
-static_assert (sizeof(OutputActionData) <= 2, "Output data too large");
+static_assert (OutputActionData::outError <= 7, "Too many output functions");
+static_assert (sizeof(OutputActionData) <= sizeof(Action), "Output data too large");
 
 struct  OutputActionPWMData {
     byte  last    :   1;
@@ -573,39 +590,76 @@ struct ExecutionState {
 static_assert (sizeof(ExecutionState) < 20, "Execution state too large");
 
 class Executor {
-    Processor*  processors[MAX_PROCESSORS];
+    static Processor*  processors[MAX_PROCESSORS];
 
     /**
        Queue of commands to be executed. Actually pointers to (immutable) action chains.
     */
-    ExecutionState queue[QUEUE_SIZE];
+    static ExecutionState queue[QUEUE_SIZE];
     byte  timeoutCount;
 
     long lastMillisTick;
     int waitIndex;
 
     void handleWait(Action* action);
-    bool isBlocked(int index);
+    static bool isBlocked(int index);
 
   public:
     Executor();
 
-    void boot();
+    static void boot();
 
-    void addProcessor(Processor*);
-    void process();
+    static void addProcessor(Processor*);
+    static void process();
 
-    void clear();
+    static void clear();
     //void unblockAction(const Action**);
-    void blockAction(int index);
-    void finishAction(const Action* action, int index);
-    void finishAction(const ExecutionState& state);
+    static void blockAction(int index);
+    static void finishAction(const Action* action, int index);
+    static void finishAction(const ExecutionState& state);
 
-    void playNewAction();
-    void schedule(const ActionRef&, int id, boolean inverse);
+    static void playNewAction();
+    static void schedule(const ActionRef&, int id, boolean inverse);
 //    void schedulePtr(const Action*, int id);
-    boolean cancelCommand(int id);
+    static boolean cancelCommand(int id);
 };
+
+class ScheduledProcessor {
+  public:
+  virtual void  timeout(unsigned int data) = 0;
+};
+
+struct ScheduledItem {
+  unsigned int timeout;
+  unsigned int data;
+  ScheduledProcessor* callback;
+
+  ScheduledItem() {
+    timeout = 0;
+    data = 0;
+    callback = NULL;
+  }
+  ScheduledItem(unsigned int aT, ScheduledProcessor* aP, unsigned int aD):
+    timeout(aT), callback(aP), data(aD) {}
+};
+
+class Scheduler2 : public Processor {
+  static ScheduledItem work[];
+  static byte bottom;
+  static byte count;
+  int v;
+public:
+  Scheduler2() : Processor() {}
+  static void boot();
+  void schedulerTick();
+  virtual R processAction2(ExecutionState& state) override;
+  virtual R processAction(const Action& ac, int handle) override;
+  virtual bool cancel(const Action& ac) override;
+  static bool schedule(unsigned int timeout, ScheduledProcessor* callback, unsigned int data);
+  static void cancel(ScheduledProcessor* callback, unsigned int data);
+};
+
+extern Scheduler2 scheduler;
 
 /**
    Handles a single servo PWM output.
@@ -892,5 +946,5 @@ const int eeaddr_commandTable = (eeaddr_actionTable + MAX_ACTIONS * sizeof(Actio
 static_assert (eeaddr_commandTable >= eeaddr_actionTable + 2 + MAX_ACTIONS * sizeof(Action), "EEPROM data overflow");
 
 const int eeaddr_top = (eeaddr_commandTable + MAX_COMMANDS * sizeof(Command)) + 2;
-static_assert (eeaddr_top + 70 < 512, "Too large data for EEPROM");
+static_assert (eeaddr_top < 700, "Too large data for EEPROM");
 

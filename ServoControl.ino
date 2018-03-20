@@ -292,7 +292,7 @@ void ServoProcessor::tick() {
   } else {
     curAngle ++;
   }
-  if (debugServo) {
+  if (debugServoMove) {
     Serial.print(servoIndex); Serial.print(":"); Serial.print(currentMillis); Serial.print(F(":\t Servo moving to ")); Serial.print(curAngle); Serial.print(F(", target = ")); Serial.println(targetAngle);
   }
   ctrl.write(curAngle);
@@ -413,13 +413,14 @@ Processor::R ServoProcessor::processAction2(ExecutionState& state) {
   if (debugServo) {
     Serial.print(s); Serial.print(F(": Action to move from ")); Serial.print(curAngle); Serial.print(F(", target = ")); Serial.println(target);
   }
+  // must set here, otherwise moveFinished may report bad data to console.
+  servoIndex = s;
   if (target == curAngle) {
     moveFinished();
     return finished;
   }
   setupSelector(s);
   ctrl.attach(pwmPin);
-  servoIndex = s;
   targetAngle = target;
   int diff = servoSpeedTimes[servoSpeed];
   switchMillis= currentMillis + diff;

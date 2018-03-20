@@ -1,7 +1,14 @@
+static Processor*  Executor::processors[MAX_PROCESSORS];
+
+    /**
+       Queue of commands to be executed. Actually pointers to (immutable) action chains.
+    */
+static ExecutionState Executor::queue[QUEUE_SIZE];
 
 void bootProcessors() {
   output.boot();
   executor.boot();
+  scheduler.boot();
 }
 
 Output::Output() {
@@ -239,7 +246,11 @@ void Executor::process() {
     ExecutionState& q = queue[i];
     if (q.action.isEmpty()) {
        continue;
-     }
+    }
+    if (q.action.a().command == continuation) {
+      q.action.next();
+      continue;
+    }
     if (q.processor != NULL) {
       Processor::R result = q.processor->pending(q.action.a(), &q.data);
       if (result == Processor::finished) {
