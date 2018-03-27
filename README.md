@@ -62,10 +62,12 @@ Rozsah kódu je bohužek takový, že neumožnil začlenit knihovnu k PWM říze
 ## Příklady nastavení
 
 Možný příklad nastavení polohy serv:
->    RNG:1:80:120:2      -- rozsah pro servo 1: 80 - 120 stupňů, rychlost pohybu 2
->    RNG:2:130:90:1      -- rozsah pro servo 2: 130 - 90 stupňů, rychlost pohybu 1
->    SFB:1:9             -- ohlas serva 1 na výstup #9
->    SFB:2:10            -- ohlas serva 2 na výstup #10
+```
+    RNG:1:80:120:2      -- rozsah pro servo 1: 80 - 120 stupňů, rychlost pohybu 2
+    RNG:2:130:90:1      -- rozsah pro servo 2: 130 - 90 stupňů, rychlost pohybu 1
+    SFB:1:9             -- ohlas serva 1 na výstup #9
+    SFB:2:10            -- ohlas serva 2 na výstup #10
+```
 
 Poloha serva se dá nastavit interaktivně pomocí
 >    CAL:1
@@ -73,39 +75,46 @@ Poloha serva se dá nastavit interaktivně pomocí
 Kdy se pak tlačítky nastaví poloha páky serva a potvrdí se. 
 
 Příklad nastavení "vlakové cesty" pro kolejovou spojku, kdy přepínač přepíná obě výhybky kolejové spojky na "odbočku", či "rovně". Jelikož jde o serva 1 a 2, přestavují se najednou
->   DEF:1:2:B           -- nastavení povelu #1, tlačítko #2. "B" značí "reverz" po uvolnění tlačítka
->   MOV:1:L             -- servo 1 do levé polohy
->   MOV:2:R             -- servo 2 do pravé polohy
->   FIN                 -- ukončení sekvence
+```
+    DEF:1:2:B           -- nastavení povelu #1, tlačítko #2. "B" značí "reverz" po uvolnění tlačítka
+    MOV:1:L             -- servo 1 do levé polohy
+    MOV:2:R             -- servo 2 do pravé polohy
+    FIN                 -- ukončení sekvence
+```
 
 Totéž, ale s požadavkem na **postupné** přestavení serv, kdy se čeká na dokončení předchozího pohybu
 > DEF:1:2:B:W           -- volitelné W na konci nařídí čekání
 
 Nebo pro postupné přestavování s větší prodlevou:
->   DEF:1:2:B           -- nastavení povelu #1, tlačítko #2. "B" značí "reverz" po uvolnění tlačítka
->   WAI:10              -- prodleva v násobku 50ms, tedy 500ms
->   MOV:1:L             -- servo 1 do levé polohy
->   WAI:10              -- prodleva v násobku 50ms
->   MOV:2:R             -- servo 2 do pravé polohy
->   FIN                 -- ukončení sekvence
+```
+    DEF:1:2:B           -- nastavení povelu #1, tlačítko #2. "B" značí "reverz" po uvolnění tlačítka
+    WAI:10              -- prodleva v násobku 50ms, tedy 500ms
+    MOV:1:L             -- servo 1 do levé polohy
+    WAI:10              -- prodleva v násobku 50ms
+    MOV:2:R             -- servo 2 do pravé polohy
+    FIN                 -- ukončení sekvence
+```
 
 Dvojtlačítkové ovládání jeřábu (servo #3): jedno tlačítko (#4) hýbe vlevo, druhé vpravo (#5). Uvolnění tlačítka jeřáb zastaví
->   RNG:3:0:180:8      -- rozsah pro servo 3: 0-180 stupňů, co nejpomaleji
->   DEF:2:4:A           -- nastavení povelu #2, tlačítko #4. "A" značí přerušení povelu po uvolnění
->   MOV:3:L             -- natáčet servo 3 do levé polohy; zrušení příkazu (uvolnění tlačítka) stopne servo
->   FIN                 -- ukončení sekvence
+```
+    RNG:3:0:180:8      -- rozsah pro servo 3: 0-180 stupňů, co nejpomaleji
+    DEF:2:4:A           -- nastavení povelu #2, tlačítko #4. "A" značí přerušení povelu po uvolnění
+    MOV:3:L             -- natáčet servo 3 do levé polohy; zrušení příkazu (uvolnění tlačítka) stopne servo
+    FIN                 -- ukončení sekvence
 
->   DEF:3:5:A           -- nastavení povelu #3, tlačítko #5.
->   MOV:3:R             -- natáčet servo 3 do pravé polohy; zrušení příkazu (uvolnění tlačítka) stopne servo
->   FIN                 -- ukončení sekvence
+    DEF:3:5:A           -- nastavení povelu #3, tlačítko #5.
+    MOV:3:R             -- natáčet servo 3 do pravé polohy; zrušení příkazu (uvolnění tlačítka) stopne servo
+    FIN                 -- ukončení sekvence
+```
 
 Současné stisknutí obou tlačítek nijak ošetřeno není - jelikož se ale jedná o jediné servo, v pořadí druhý povel vyčká až se zcela vykoná prvni (servo dojede do jedné z krajních poloh). 
 
 Rozsvícení domečku na určitou dobu, avšak opětovným stiskem téhož tlačítka domek zhasne ihned:
->   DEF:4:1:R           -- stisk tlačítka 1 sekvenci zapne, opětovný stisk "vrátí"
->   OUT:1:+             -- zapnout výstup 1
->   WAI:1000            -- čekat 50ms * 1000 tzn. 50 sekund
->   OUT:1:-             -- vypne výstup. Při "vracení" nemá vliv
-
+```
+    DEF:4:1:R           -- stisk tlačítka 1 sekvenci zapne, opětovný stisk "vrátí"
+    OUT:1:+             -- zapnout výstup 1
+    WAI:1000            -- čekat 50ms * 1000 tzn. 50 sekund
+    OUT:1:-             -- vypne výstup. Při "vracení" nemá vliv
+```
 Pozor - čekající příkazy se počítají do běžících sekvencí, jejichž počet je omezen (cca 20). Při naplnění kapacity se nedají provést ani "bežné" sekvence jako točení serva.
 

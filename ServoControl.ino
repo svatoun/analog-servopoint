@@ -342,7 +342,8 @@ boolean ServoProcessor::isCompatibleWith(int otherIndex) {
   return si == oe;
 }
 
-boolean ServoProcessor::cancel(const Action& action) {
+boolean ServoProcessor::cancel(const ExecutionState& s) {
+  const Action& action = s.action.a();
   if (blockedAction == &action) {
     clear();
     return true;

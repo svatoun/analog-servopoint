@@ -60,7 +60,7 @@ void clearCommands() {
 void dumpCommands() {
   for (int i = 0; i < MAX_COMMANDS; i++) {
     if (commands[i].available()) {
-      break;
+      continue;
     }
     String s;
     commands[i].print(s);

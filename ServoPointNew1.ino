@@ -170,6 +170,7 @@ void servoSetup();
 
 void initializeHW() {
   keypad.digitalPins(A5);
+  keypad.setDebounceTime(200);
   
   //  Serial.begin(115200);
   Serial.begin(57600);
@@ -314,15 +315,13 @@ void processKeyCallback(const Key2& k, char c) {
     }
     boolean pressed = (k.kstate  == PRESSED);
     int ch = keypad.getChar(k);
-    if (debugInput) {
-      Serial.print(F("Processing key: #")); Serial.print(ch);
-      if (pressed) {
-        Serial.println(F(" DOWN"));
-      } else {
-        Serial.println(F(" UP"));
-      }
+    Serial.print(F("Processing key: #")); Serial.print(ch);
+    if (pressed) {
+      Serial.println(F(" DOWN"));
+    } else {
+      Serial.println(F(" UP"));
     }
-    processKey(ch, pressed);
+    processKey(ch - 1, pressed);
 }
 
 void loop() {

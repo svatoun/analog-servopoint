@@ -92,16 +92,6 @@ bool Output::isSet(int index) {
 
 //
 ////////////////////////////////////////////////////////////////////////////
-int WaitActionData::computeDelay() {
-  if (waitTime <= 60) {
-    return waitTime;
-  } else if (waitTime <= (60 + 300)) {
-    return (waitTime - 60) * 10;  
-  } else {
-    return (waitTime - (60 + 300)) * (60 * 10);
-  }
-}
-
 //
 ////////////////////////////////////////////////////////////////////////////
 
@@ -132,7 +122,7 @@ boolean Executor::cancelCommand(int id) {
      }
      if (q.id == id) {
       if (q.processor != NULL) {
-        q.processor->cancel(q.action.a());
+        q.processor->cancel(q);
       }
       q.clear();
       return true;
@@ -207,12 +197,15 @@ void Executor::finishAction(const Action* action, int index) {
   if (index < 0 || index >= QUEUE_SIZE) {
     return;
   }
-  ExecutionState& q = queue[index];
+  finishAction2(queue[index]);
+}
+
+void Executor::finishAction2(ExecutionState& q) {
   if (debugExecutor) {
-    Serial.print(F("Action to finish:")); Serial.println((int)action, HEX);
-    Serial.print(F("Action in state:")); Serial.println(q.action.i(), HEX);
+    Serial.print(F("Action to finish:")); Serial.println(q.action.i(), HEX);
   }
   q.blocked = false;
+  q.wait = q.waitNext;
   if (q.action.isEmpty()) {
     return;
   }
@@ -221,7 +214,7 @@ void Executor::finishAction(const Action* action, int index) {
   }
   q.action.next();
   if (debugExecutor) {
-    Serial.print(F("Finished action in queue: ")); Serial.print(index); Serial.print(F(", nextAction: ")); Serial.println(q.action.i(), HEX);
+    Serial.print(F("Finished action in queue: ")); Serial.print((&q - queue)); Serial.print(F(", nextAction: ")); Serial.println(q.action.i(), HEX);
   }
 }
 
