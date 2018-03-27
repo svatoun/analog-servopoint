@@ -298,8 +298,8 @@ void commandDefine(String& s) {
         break;
       case 'T': case 't': trigger = Command::cmdToggle; break;
       case 'A': case 'a': trigger = Command::cmdOnCancel; break;
-      case 'B': case 'b': trigger = Command::cmdOnReverts; break;
-      case 'R': case 'r': trigger = Command::cmdOffReverts; break;
+      case 'B': case 'b': trigger = Command::cmdOffReverts; break;
+      case 'R': case 'r': trigger = Command::cmdOnReverts; break;
       default:
         Serial.println(F("Bad trigger"));
         return;

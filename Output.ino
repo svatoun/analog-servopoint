@@ -13,7 +13,7 @@ class OutputProcessor : public Processor, public ScheduledProcessor {
     void timeout(unsigned int data) override;
     void tick() override;
     void clear() override;
-    boolean cancel(const Action& ac) override;
+    boolean cancel(const ExecutionState& ac) override;
 };
 
 OutputProcessor outputProcessor;
@@ -28,16 +28,21 @@ void OutputProcessor::clear() {
 
 #define OUTPUT_MASK 0x3f
 
-void OutputProcessor::timeout(unsigned int data) {
-  byte kind = (data >> 8) & 0xff;
-  if (kind == 0) {
-    // pulse, low bits is the output bit
-    int b = data & OUTPUT_MASK;
-    output.setBit(b, false);
+void OutputProcessor::timeout(unsigned int param) {
+  ExecutionState& state = (ExecutionState&)param;
+  
+  const Action& a = *state.action.aptr();
+  const OutputActionData& data = a.asOutputAction();
+  byte b = data.outputIndex;
+  // pulse, low bits is the output bit
+  output.setBit(b, false);
+  if (state.wait) {
+    Executor::finishAction2(state);
   }
 }
 
-boolean OutputProcessor::cancel(const Action& a) {
+boolean OutputProcessor::cancel(const ExecutionState& s) {
+  const Action& a = s.action.a();
   if (a.command == onOff) {
     OutputActionData& data = a.asOutputAction();
     output.setBit(data.output(), false);
@@ -58,7 +63,7 @@ Processor::R OutputProcessor::processAction2(ExecutionState& state) {
   byte fn = data.fn;
   boolean newState;
   byte outN = data.outputIndex;
-  
+  bool t = false;
   switch (fn) {
     case OutputActionData::outPulse:   
       {
@@ -66,16 +71,21 @@ Processor::R OutputProcessor::processAction2(ExecutionState& state) {
         if (d == 0) {
           d = 6;
         }
-        scheduler.schedule(d, this, outN & OUTPUT_MASK);
+        scheduler.schedule(d, this, &state);
+        t = true;
       }
       // fall through
     case OutputActionData::outOn:       newState = !state.invert; break;
     case OutputActionData::outOff:      newState = state.invert; break;
-    case OutputActionData::outToggle:   newState = !output.isSet(data.outputIndex); break;
+    case OutputActionData::outToggle:   newState = !output.isSet(data.outputIndex);  break;
   }
 
   output.setBit(outN, newState);
-  return Processor::finished;
+  if (t && state.wait) {
+    return Processor::blocked;
+  } else {
+    return Processor::finished;
+  }
 }
 
 static_assert (MAX_OUTPUT <= (OUTPUT_MASK + 1), "Maximum outputs too high");

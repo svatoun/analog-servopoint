@@ -11,6 +11,8 @@ byte Scheduler2::count = 0;
 
 void Scheduler2::boot() {
   Executor::addProcessor(&scheduler);
+  registerLineCommand("WAI", &waitCommand);
+  registerLineCommand("WAC", &waitConditionCommand);
 }
 
 bool Scheduler2::schedule(unsigned int timeout, ScheduledProcessor* callback, unsigned int data) {
@@ -20,18 +22,15 @@ bool Scheduler2::schedule(unsigned int timeout, ScheduledProcessor* callback, un
   if (callback == NULL) {
     return false;
   }
-  Serial.print("Schedule, timeout "); Serial.print(timeout);
   ScheduledItem* item = work + bottom;
   if (count == 0) {
     baseMillis = currentMillis;
   }
   long x = (currentMillis - baseMillis) / MILLIS_SCALE_FACTOR;
   x += timeout;
-  Serial.print("End time:"); Serial.println(x);
   if (count > 0) {
     ScheduledItem* maxItem = work + count;
     while (item < maxItem) {
-      Serial.print(item->timeout);
       if (item->timeout > x) {
         memmove(item + 1, item, (maxItem - item - 1) * sizeof(ScheduledItem));
         break;
@@ -44,16 +43,18 @@ bool Scheduler2::schedule(unsigned int timeout, ScheduledProcessor* callback, un
     return;
   }
   int id = item - work;
-  Serial.print("Scheduling callback "); Serial.print((int)callback, HEX); Serial.print(" at "); Serial.print(id); Serial.print(" data "); Serial.println(data, HEX); 
   *item = nItem;
   count++;
-  Serial.print("Count:"); Serial.println(count); 
   item = work;
   for (int i = 0; i < count; i++) {
-    Serial.println(item->timeout);
     item++;
   }
   return true;
+}
+
+void Scheduler2::timeout(unsigned int data) {
+  ExecutionState& s = (ExecutionState&)data;
+  Executor::finishAction2(s);
 }
 
 void Scheduler2::schedulerTick() {
@@ -71,7 +72,6 @@ void Scheduler2::schedulerTick() {
     item++;
   }
   if (idx == 0) {
-//    Serial.println("No item fired");     
     // check if baseMillis is not TOO low
     if (delta > MILLIS_FIXUP_THRESHOLD) {
       while (item >= work) {
@@ -84,14 +84,10 @@ void Scheduler2::schedulerTick() {
   }
   bottom = idx;
 
-  Serial.print("Expired bottom:"); Serial.println(bottom); 
-
   ScheduledItem *expired = work;
   for (signed char x = 0; x < idx; x++) {
     ScheduledProcessor* cb = expired->callback;
     if (cb != NULL) {
-      Serial.print("Calling callback "); Serial.print((int)cb, HEX); Serial.print(" at "); Serial.print(x);
-      Serial.print(" data "); Serial.println(expired->data, HEX); 
       cb->timeout(expired->data);
     }
     expired++;
@@ -113,15 +109,80 @@ void Scheduler2::cancel(ScheduledProcessor* callback, unsigned int data) {
   }
 }
 
-bool Scheduler2::cancel(const Action& a) {
-  return Processor::R::ignored;
+bool Scheduler2::cancel(const ExecutionState& s) {
+  const Action& a = s.action.a();
+  const WaitActionData& wad = (const WaitActionData&)a;
+  switch (wad.command) {
+    case WaitActionData::wait:
+      cancel(this, &s);
+      return true;
+  }
+  return false;
 }
 
 Processor::R Scheduler2::processAction2(ExecutionState& s) {
-  return Processor::R::ignored;
+  const Action& a = s.action.a();
+  if (a.command != wait) {
+    return Processor::R::ignored;
+  }
+  if (!s.action.isPersistent() || s.invert) {
+    return Processor::R::finished;
+  }
+
+  const WaitActionData& wad = (const WaitActionData&)a;
+  switch (wad.waitType) {
+    case WaitActionData::alwaysFinish:
+      s.wait = true; s.waitNext = true;
+      return Processor::R::finished;  
+    case WaitActionData::noWait:
+      s.wait = false; s.waitNext = false;
+      return Processor::R::finished;  
+    case WaitActionData::finishOnce:
+      s.wait = true; s.waitNext = false;
+      return Processor::R::finished;  
+    case WaitActionData::wait:
+      schedule(this, wad.computeDelay(), &s);
+      break;
+  }
 }
 
 Processor::R Scheduler2::processAction(const Action& a, int handle) {
   return Processor::R::ignored;
 }
+
+
+
+void waitCommand(String& s) {
+  Action action;
+  WaitActionData& wad = (WaitActionData&)action;
+  char c = s.charAt(0);
+  switch (c) {
+    case '+':
+      wad.waitType = WaitActionData::alwaysFinish;
+      break;
+    case '-':
+      wad.waitType = WaitActionData::noWait;
+      break;
+    case '!':
+      wad.waitType = WaitActionData::finishOnce;
+      break;
+    case '0': case '1': case '2': case '3': case '4': case '5': case '6': case '7': case '8': case '9': {
+        int n = nextNumber(s);
+        if (n <= 0) {
+          Serial.print(F("Bad timeout"));
+          return;
+        }
+        wad.waitType = WaitActionData::wait;
+        wad.waitTime = n / 50;
+        break;
+    }
+  }
+  prepareCommand();
+  addCommandPart(action);
+}
+
+void waitConditionCommand(String& s) {
+  
+}
+
 

@@ -401,7 +401,7 @@ struct OutputActionData {
         outError
     };
     OutputFunction  fn : 3;    // output function style
-    byte  outputIndex : 6;    // up to 32 outputs
+    byte  outputIndex : 5;    // up to 32 outputs
     byte  pulseLen : 8;
 
   public:
@@ -513,23 +513,12 @@ struct WaitActionData {
   byte  last    : 1;
   byte  command : 3;
 
-  bool  special : 1;
-  int   waitTime : 11;    
-  /*
-  union {
-    struct {
-      byte kind : 3;
-      union {
-        byte inputNo : 5;
-        byte commandNo :6;
-      };
-    };
-  };
-  */
+
   enum {
     indefinitely = 0,
     finishOnce = 1,
     alwaysFinish = 2,
+    noWait,
     inputOn,
     inputOff,
     commandInactive,
@@ -537,11 +526,19 @@ struct WaitActionData {
     
     timerError
   };
+  byte waitType : 3;
+  byte : 0; // padding
+  union {
+    byte  commandNumber : 6;
+    byte  outputNumber : 6;
+    unsigned int waitTime : 10;
+  };
 
-  int   computeDelay();
+  int   computeDelay() { return waitTime * 50; }
 };
 
 static_assert (sizeof(WaitActionData) <= sizeof(Action), "Wait action data too long");
+static_assert (WaitActionData::timerError <= 8, "Too many wait types");
 
 struct ExecutionState;
 
@@ -558,7 +555,7 @@ class Processor {
     virtual R processAction(const Action& ac, int handle) = 0;
     virtual void tick() {};
     virtual void clear() {}
-    virtual boolean cancel(const Action& ac) = 0;
+    virtual boolean cancel(const ExecutionState& ac) = 0;
     virtual R pending(const Action& ac, void* storage) {
       return ignored;
     }
@@ -568,13 +565,14 @@ struct ExecutionState {
   byte    id;       // command ID ?
   boolean blocked;  // if the execution is blocked
   boolean wait;
+  boolean waitNext;
   boolean invert;
   // 1 bits remains
   
   ActionRef  action; // the current executing action
   Processor* processor;
 
-  byte  data[4];
+  byte  data[3];
 
   boolean isAvailable() {
     return !blocked && action.isEmpty();
@@ -609,6 +607,7 @@ class Executor {
 
     static void boot();
 
+    static void finishAction2(ExecutionState& state);
     static void addProcessor(Processor*);
     static void process();
 
@@ -643,7 +642,7 @@ struct ScheduledItem {
     timeout(aT), callback(aP), data(aD) {}
 };
 
-class Scheduler2 : public Processor {
+class Scheduler2 : public Processor, public ScheduledProcessor {
   static ScheduledItem work[];
   static byte bottom;
   static byte count;
@@ -652,9 +651,10 @@ public:
   Scheduler2() : Processor() {}
   static void boot();
   void schedulerTick();
+  virtual void timeout(unsigned int data) override;
   virtual R processAction2(ExecutionState& state) override;
   virtual R processAction(const Action& ac, int handle) override;
-  virtual bool cancel(const Action& ac) override;
+  virtual bool cancel(const ExecutionState& ac) override;
   static bool schedule(unsigned int timeout, ScheduledProcessor* callback, unsigned int data);
   static void cancel(ScheduledProcessor* callback, unsigned int data);
 };
@@ -707,7 +707,7 @@ class ServoProcessor : public Processor {
     static void clearAll();
     R processAction2(ExecutionState& state) override;
     R processAction(const Action& ac, int handle) override;
-    boolean cancel(const Action& ac) override;
+    boolean cancel(const ExecutionState& ac) override;
 
     boolean available() {
       return servoIndex == noservo;
