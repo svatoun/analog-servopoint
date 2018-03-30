@@ -215,7 +215,7 @@ void commandBack(String& s) {
   }
   commandDef--;
   newCommand[commandDef - 1].makeLast();
-  Serial.print(F("\n")); Serial.print(commandDef, DEC); Serial.println(F(":>>"));
+  Serial.print(F("\n")); Serial.print(commandDef + 1, DEC); Serial.println(F(":>>"));
 }
 
 void commandCancel(String& s) {
@@ -328,7 +328,7 @@ void commandDefine(String& s) {
   definedCommand.id = no;
 
   String e;
-  c.print(e);
+  definedCommand.print(e);
   Serial.println(e);
   commandDef = 0;
   if (interactive) {

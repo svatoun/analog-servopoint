@@ -398,11 +398,11 @@ int defineNewCommand(const Command& c, Command& target) {
       ok = true;
       break;
     }
+    empty = false;
     if (a.isLast()) {
       ok = true;
       break;
     }
-    empty = false;
   }
   if (empty || !ok) {
     return -1;

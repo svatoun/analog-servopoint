@@ -11,8 +11,39 @@ byte Scheduler2::count = 0;
 
 void Scheduler2::boot() {
   Executor::addProcessor(&scheduler);
-  registerLineCommand("WAI", &waitCommand);
+  registerLineCommand("WAT", &waitCommand);
   registerLineCommand("WAC", &waitConditionCommand);
+  Action::registerDumper(Instr::wait, &printWaitTime);
+}
+
+void printWaitTime(const Action& a, String& s) {
+  a.asWaitAction().print(s);
+}
+
+/*
+  enum {
+    indefinitely = 0,
+    finishOnce = 1,
+    alwaysFinish = 2,
+    noWait,
+    inputOn,
+    inputOff,
+    commandInactive,
+    wait,
+    
+    timerError
+  };
+  */
+void WaitActionData::print(String& s) {
+  switch (waitType) {
+    case wait:
+      s += F("WAT:");
+      s += waitTime * 50;
+      break;
+    default:
+      s += F("WAT:err");
+      break;
+  }
 }
 
 bool Scheduler2::schedule(unsigned int timeout, ScheduledProcessor* callback, unsigned int data) {
@@ -150,10 +181,9 @@ Processor::R Scheduler2::processAction(const Action& a, int handle) {
   return Processor::R::ignored;
 }
 
-
-
 void waitCommand(String& s) {
   Action action;
+  action.command = Instr::wait;
   WaitActionData& wad = (WaitActionData&)action;
   char c = s.charAt(0);
   switch (c) {

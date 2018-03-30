@@ -535,6 +535,8 @@ struct WaitActionData {
   };
 
   int   computeDelay() { return waitTime * 50; }
+
+  void print(String& s);
 };
 
 static_assert (sizeof(WaitActionData) <= sizeof(Action), "Wait action data too long");
