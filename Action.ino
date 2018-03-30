@@ -35,9 +35,11 @@ Action& Action::get(int index, Action& target) {
 }
 
 void Action::initialize() {
-  for (int cbIndex = 0; cbIndex < sizeof(renumberCallbacks) / sizeof(renumberCallbacks[0]); cbIndex++) {
-    renumberCallbacks[cbIndex] = NULL;
+#ifdef RENUMBER_ACTIONS
+  for (ActionRenumberFunc* ptr = renumberCallbacks; ptr < (renumberCallbacks + sizeof(renumberCallbacks) / sizeof(renumberCallbacks[0])); ptr++) {
+    *ptr = NULL;
   }
+#endif
 }
 
 void clearActions() {
@@ -47,23 +49,16 @@ void clearActions() {
 }
 
 
-/*
-const Action* Action::next() {
-  if (isLast()) {
-    return NULL;
-  } else {
-    return this + 1;
-  }
-}
-*/
 
 void Action::renumberCallback(ActionRenumberFunc f) {
-  for (int i = 0; i < sizeof(renumberCallbacks) / sizeof(renumberCallbacks[0]); i++) {
-    if (renumberCallbacks[i] == NULL) {
-      renumberCallbacks[i] = f;
+#ifdef RENUMBER_ACTIONS
+  for (ActionRenumberFunc* ptr = renumberCallbacks; ptr < (renumberCallbacks + sizeof(renumberCallbacks) / sizeof(renumberCallbacks[0])); ptr++) {
+    if (*ptr == NULL) {
+      *ptr = f;
       return;
     }
   }
+#endif
 }
 
 int Action::copy(const Action* from, int s) {
@@ -105,9 +100,9 @@ int Action::findSpace(int size) {
       return head;
     }
   }
-  if (debugCommands) {
-    Serial.println(F("Serial table overflow, trying to compact"));
-  }
+  Serial.println(F("Serial table overflow, trying to compact"));
+
+#ifdef RENUMBER_ACTIONS
   // no room, so compact / renumber
   int compactIndex = 0;
   boolean firstNonEmpty = true;
@@ -153,6 +148,9 @@ int Action::findSpace(int size) {
   } else {
     return -1;
   }
+#else // !RENUMBER_ACTIONS
+  return -1;
+#endif
 }
 
 void Action::freeAll() {
@@ -170,14 +168,13 @@ ActionRef Action::getRef(byte index) {
 }
 
 bool ActionRef::isEmpty() {
+  if (ptr != NULL) {
+    return ptr->isEmpty();
+  }
   if (index == noIndex) {
     return true;
   }
-  if (ptr != NULL) {
-    return ptr->isEmpty();
-  } else {
-    return ((index >= MAX_ACTIONS) || current.isEmpty());
-  }
+  return ((index >= MAX_ACTIONS) || current.isEmpty());
 }
 
 void ActionRef::clear() {
@@ -244,18 +241,6 @@ void ActionRef::free() {
     next();
   } while (!l && !isEmpty());
   clear();
-  /*
-  bool l;
-  Action* a = this;
-  do {
-    l = a->isLast();
-    if (debugCommands) {
-      Serial.print(F("Free action at ")); Serial.println((int)a, HEX);
-    }
-    a->init();
-    a++;
-  } while (!l && ((a - actionTable) < MAX_ACTIONS));
-  */
 }
 
 void ActionRef::save() {

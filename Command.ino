@@ -40,32 +40,35 @@ void commandStatus() {
     }
   }
   int cmdCount = 0;
-  for (int i = 0; i < MAX_COMMANDS; i++) {
-    if (commands[i].available()) {
-      break;
+  const Command* cp;
+  for (cp = commands; cp < (commands + MAX_COMMANDS); cp++) {
+    if (!cp->available()) {
+      cmdCount++;
     }
-    cmdCount++;
   }  
   Serial.print(F("Action count: ")); Serial.println(actionCount);
   Serial.print(F("Defined commands: ")); Serial.println(cmdCount);
 }
 
 void clearCommands() {
-  for (int i = 0; i < MAX_COMMANDS; i++) {
-    commands[i].free();
+  Command* cp;
+  for (cp = commands; cp < (commands + MAX_COMMANDS); cp++) {
+    cp->free();
   }
   Action::freeAll();
 }
 
 void dumpCommands() {
-  for (int i = 0; i < MAX_COMMANDS; i++) {
-    if (commands[i].available()) {
+  const Command* cp;
+  for (cp = commands; cp < (commands + MAX_COMMANDS); cp++) {
+    const Command&c = *cp;
+    if (c.available()) {
       continue;
     }
     String s;
-    commands[i].print(s);
+    c.print(s);
     Serial.println(s);
-    int actionIndex = commands[i].actionIndex;
+    int actionIndex = c.actionIndex;
     ActionRef ref = Action::getRef(actionIndex);
     while (!ref.isEmpty()) {
       s = "";
@@ -87,8 +90,9 @@ void commandEepromLoad() {
 void initializeTables() {
   Action::initialize();
   Action::freeAll();
-  for (int i = 0; i < MAX_COMMANDS; i++) {
-    commands[i].init();
+  const Command* cp;
+  for (cp = commands; cp < (commands + MAX_COMMANDS); cp++) {
+    cp->init();
   }
 }  
 
@@ -97,31 +101,32 @@ void Command::execute(boolean keyPressed) {
     return;
   }
   int t = trigger;
+  ActionRef aref = Action::getRef(actionIndex);
   switch (t) {
     case cmdOn:
       if (!keyPressed) {
         break;
       }
     case cmdToggle:
-      executor.schedule(Action::getRef(actionIndex), id, false);
+      executor.schedule(aref, id, false);
       break;
     case cmdOff:
       if (!keyPressed) {
-        executor.schedule(Action::getRef(actionIndex), id, false);
+        executor.schedule(aref, id, false);
       }
       break;
     case cmdOnCancel:
       if (keyPressed) {
-        executor.schedule(Action::getRef(actionIndex), id, false);
+        executor.schedule(aref, id, false);
       } else if (id != 0) {
         executor.cancelCommand(id);
       }
       break;
     case cmdOffReverts:
       if (keyPressed) {
-        executor.schedule(Action::getRef(actionIndex), id, false);
+        executor.schedule(aref, id, false);
       } else {
-        executor.schedule(Action::getRef(actionIndex), id, true);
+        executor.schedule(aref, id, true);
       }
       break;
   }
@@ -245,22 +250,6 @@ void Command::free() {
     }
     ref.free();
   }
-  /*
-  boolean last;
-  do {
-    last = a->isLast();
-    a->free();
-  } while (!last);
-  */
 }
 
-/*
-Command& Command::operator =(const Command& other) {
-  free();
-  input = other.input;
-  on = other.on;
-  wait = other.wait;
-  actionIndex = other.actionIndex;
-}
-*/
 

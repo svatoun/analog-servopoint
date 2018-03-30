@@ -210,9 +210,11 @@ void commandReset(String& s) {
 
 void commandBack(String& s) {
   if (commandDef <= 0) {
+    Serial.println(F("At start"));
     return;
   }
   commandDef--;
+  newCommand[commandDef - 1].makeLast();
   Serial.print(F("\n")); Serial.print(commandDef, DEC); Serial.println(F(":>>"));
 }
 

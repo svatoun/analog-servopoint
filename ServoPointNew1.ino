@@ -63,8 +63,8 @@ void clearNewCommand() {
     Serial.println(F("Clearing new command"));
   }
   executor.clear();
-  for (int i = 0; i < sizeof(newCommand) / sizeof(newCommand[0]); i++) {
-    newCommand[i].init();
+  for (Action* a = newCommand; a < (newCommand + newCommandPartMax); a++) {
+    a->init();
   }
 }
 
@@ -76,27 +76,25 @@ int addNewCommand(const Action& t) {
     Serial.print(F(", data = "));
     Serial.println(t.data, HEX);
   }
-  int lastC = -1;
-  for (int i = 0; i < sizeof(newCommand) / sizeof(newCommand[0]); i++) {
-    if (newCommand[i].isEmpty()) {
-      newCommand[i] = t;
+  Action* prev = newCommand;
+  for (Action* pa = newCommand; pa < (newCommand + newCommandPartMax); pa++) {
+    Action& a = *pa;
+    if (a.isEmpty()) {
+      a = t;
       if (debugControl) {
         Serial.print(F("Added at position"));
-        Serial.print(i);
+        Serial.print((pa - newCommand));
         Serial.print(F(" = "));
-        Serial.print((int)&newCommand[i], HEX);
+        Serial.print((int)&a, HEX);
         Serial.print(F(":"));
-        Serial.print(newCommand[i].command);
+        Serial.print(a.command);
         Serial.print(F(", data = "));
-        Serial.println(newCommand[i].data, HEX);
+        Serial.println(a.data, HEX);
       }
-      if (lastC != -1) {
-        newCommand[lastC].notLast();
-      }
-      newCommand[i].makeLast();
-      return i;
+      prev->notLast();
+      a.makeLast();
+      return (pa - newCommand);
     }
-    lastC = i;
   }
   return -1;
 }
@@ -133,15 +131,15 @@ void handleAckLed() {
   }
   long t = millis();
   long l = t - blinkLastMillis;
-  if (l < blinkPtr[pos]) {
+  if (l < *blinkPtr) {
     return;
   }
   blinkLastMillis = t;
-  pos++;
+  blinkPtr++;
   if (debugControl) {
-    Serial.print(F("Next ACK time: ")); Serial.println(blinkPtr[pos]);
+    Serial.print(F("Next ACK time: ")); Serial.println(*blinkPtr);
   }
-  if (blinkPtr[pos] == 0) {
+  if (*blinkPtr == 0) {
     ackLedState = 0;
     digitalWrite(LED_ACK, LOW);
     if (pulseCount > 0) {
@@ -390,29 +388,30 @@ int defineCommand(const Command& def, int no) {
 }
 
 int defineNewCommand(const Command& c, Command& target) {
-  int s = -1;
-
-  for (int i = 0; i < newCommandPartMax; i++) {
-    if (newCommand[i].isEmpty()) {
-      if (i == 0) {
-        return -1;
-      }
-      newCommand[i - 1].makeLast();
-      s = i;
+  boolean empty = true;
+  boolean ok = false;
+  Action* pa;
+  for (pa = newCommand; pa < (newCommand + newCommandPartMax); pa++) {
+    Action& a = *pa;
+    if (a.isEmpty()) {
+      pa--;
+      ok = true;
       break;
     }
-    if (newCommand[i].isLast()) {
-      s = i + 1;
+    if (a.isLast()) {
+      ok = true;
       break;
     }
+    empty = false;
   }
+  if (empty || !ok) {
+    return -1;
+  }
+  pa->makeLast();
+  int s = (pa - newCommand) + 1;
   if (debugCommands) {
     Serial.print(F("Action count: ")); Serial.println(s);
   }
-  if (s < 1) {
-    return -1;
-  }
-
   int aIndex = Action::copy(&newCommand[0], s);
   if (debugCommands) {
     Serial.print(F("Copied at: ")); Serial.println(aIndex);
