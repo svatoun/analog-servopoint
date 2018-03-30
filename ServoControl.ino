@@ -457,13 +457,13 @@ void moveCommand(String& line) {
   sNumber--;
   char c = line.charAt(0);
   Action a;
-  
+  ServoActionData& d = a.asServoAction();  
   switch (c) {
     case 'l': case 'L':
-      a.asServoAction().moveLeft(sNumber);
+      d.moveLeft(sNumber);
       break;  
     case 'r': case 'R':
-      a.asServoAction().moveRight(sNumber);
+      d.moveRight(sNumber);
       break;
     default:
       int v = nextNumber(line);
@@ -471,7 +471,7 @@ void moveCommand(String& line) {
         Serial.println(F("Invalid position"));
         return;
       }
-      a.asServoAction().move(sNumber, v);
+      d.move(sNumber, v);
       break;
   }
   prepareCommand();

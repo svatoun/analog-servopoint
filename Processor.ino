@@ -12,8 +12,8 @@ void bootProcessors() {
 }
 
 Output::Output() {
-  for (int i = 0; i < OUTPUT_BIT_SIZE; i++) {
-    lastOutputState[i] = newOutputState[i] = 0;
+  for (byte *os = newOutputState, *los = lastOutputState; los < (lastOutputState + OUTPUT_BIT_SIZE); os++, los++) {
+    *os = *los = 0;
   }
 }
 
@@ -45,8 +45,8 @@ void Output::clear(int index) {
 }
 
 void Output::clearAll() {
-  for (int i = 0; i < OUTPUT_BIT_SIZE; i++) {
-    newOutputState[i] = 0;
+  for (byte *os = newOutputState; os < (newOutputState + OUTPUT_BIT_SIZE); os++) {
+    *os = 0;
   }
 }
 
@@ -96,8 +96,8 @@ bool Output::isSet(int index) {
 ////////////////////////////////////////////////////////////////////////////
 
 Executor::Executor() {
-  for (int i = 0; i < MAX_PROCESSORS; i++) {
-    processors[i] = NULL;
+  for (Processor **p = processors; p < (processors + MAX_PROCESSORS); p++) {
+    *p = NULL;
   }
 }
 
@@ -106,9 +106,9 @@ void Executor::boot() {
 }
 
 void Executor::addProcessor(Processor* p) {
-  for (int i = 0; i < MAX_PROCESSORS; i++) {
-    if (processors[i] == NULL) {
-      processors[i] = p;
+  for (Processor **x = processors; x < (processors + MAX_PROCESSORS); x++) {
+    if (*x == NULL) {
+      *x = p;
       break;
     }
   }
@@ -156,15 +156,19 @@ void Executor::handleWait(Action* a) {
 void Executor::schedule(const ActionRef& ref, int id, boolean invert) {
   if (debugExecutor) {
     Serial.print(F("Scheduling action: ")); Serial.println((int)ref.i(), HEX);
-  }
-  for (int i = 0; i < QUEUE_SIZE; i++) {
-    if (queue[i].isAvailable()) {
-      queue[i].action = ref;
-      queue[i].id = id;
-      queue[i].blocked = false;
-      queue[i].invert = invert;
+    String s;
+    ref.a().print(s);
+    Serial.print(F("Action: ")); Serial.println(s);
+  }  
+  for (ExecutionState* st = queue; st < (queue + QUEUE_SIZE); st++) {
+    ExecutionState& q = *st;
+    if (q.isAvailable()) {
+      q.action = ref;
+      q.id = id;
+      q.blocked = false;
+      q.invert = invert;
       if (debugExecutor) {
-        Serial.print(F("Scheduled at: ")); Serial.print(i); Serial.print(F(" ")); Serial.println((int)&queue[i].action, HEX);
+        Serial.print(F("Scheduled at: ")); Serial.print((st - queue)); Serial.print(F(" ")); Serial.println((int)&q.action, HEX);
       }
       return;
     }
@@ -173,13 +177,6 @@ void Executor::schedule(const ActionRef& ref, int id, boolean invert) {
 
 bool Executor::isBlocked(int index) {
   return (index < 0) || (index >= QUEUE_SIZE) || queue[index].blocked;
-}
-
-void Executor::blockAction(int index) {
-  if (index < 0 || index > QUEUE_SIZE) {
-    return;
-  }
-  queue[index].blocked = true;
 }
 
 void Executor::finishAction(const ExecutionState& state) {
@@ -229,11 +226,11 @@ void block(ExecutionState& q, Processor* proc) {
 }
 
 void Executor::process() {
-  for (int px = 0; px < MAX_PROCESSORS; px++) {
-    if (processors[px] == NULL) {
+  for (Processor** p = processors; p < (processors + MAX_PROCESSORS); p++) {
+    if (*p == NULL) {
       continue;
     }
-    processors[px]->tick();
+    (*p)->tick();
   }
   for (int i = 0; i < QUEUE_SIZE; i++) {
     ExecutionState& q = queue[i];

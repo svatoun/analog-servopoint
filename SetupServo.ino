@@ -38,11 +38,6 @@ class InputServoNumber : public NumberInput {
   InputServoNumber() : NumberInput(1, MAX_SERVO) {}
 
   virtual void finished(int value) override;
-  
-  virtual void showIdle(int value) override {
-    waveSelectedServo(value - 1);
-    shown = true;
-  }
 };
 
 class InputServoSpeed : public NumberInput {
@@ -50,7 +45,6 @@ class InputServoSpeed : public NumberInput {
   InputServoSpeed() : NumberInput(1, MAX_SPEED) {}
 
   virtual void finished(int speed) override;
-  virtual void showIdle(int speed) override;
   void displayCurrent(int selected) override;
   void cancelled() override;
   int getValue() override;
@@ -155,10 +149,6 @@ void InputServoSpeed::displayCurrent(int n) {
   sad.moveRight(setupServoIndex);
   addNewCommand(a);
   executor.playNewAction();
-}
-
-void InputServoSpeed::showIdle(int n) {
-  displayCurrent(n);
 }
 
 void enterSetupServo0() {
@@ -318,56 +308,6 @@ void NumberInput::handleKeyPressed() {
     displayCurrent(selectedNumber);
     lastSelectedNumber = selectedNumber;
   }
-}
-
-void NumberInput::handleIdle() {
-  if ((lastTypedMillis == 0) || shown) {
-    return;
-  }
-  if (lastTypedMillis + 2000 > currentMillis) {
-    return;
-  }
-  int v = typedNumber == -1 ? selectedNumber : typedNumber;
-  showIdle(v);
-  shown = true;
-}
-
-void waveSelectedServo() {
-  waveSelectedServo(setupServoIndex);
-}
-
-void waveSelectedServo(int servoId) {
-    if (servoId >= MAX_SERVO) {
-      return;
-    }
-    clearNewCommand();
-
-    String out;
-
-    Action a1;
-    a1.asServoAction().move(servoId, 70);
-    addNewCommand(a1);
-    if (debugControl) {
-      a1.asServoAction().print(out);
-      out.concat('\n');
-    }
-
-    a1.asServoAction().move(servoId, 110);
-    addNewCommand(a1);
-    if (debugControl) {
-      a1.asServoAction().print(out);
-      out.concat('\n');
-    }
-
-    a1.asServoAction().moveLeft(servoId);
-    addNewCommand(a1);
-    if (debugControl) {
-      a1.asServoAction().print(out);
-      out.concat('\n');
-
-      Serial.print(out);
-    }
-    executor.playNewAction();
 }
 
 void rangeCommand(String& l) {

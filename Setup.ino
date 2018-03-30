@@ -86,7 +86,6 @@ void handleInitialMenu() {
 
 void handleSetupIdle() {
   if (numberInput != NULL) {
-    numberInput->handleIdle();
     return;
   }
   switch (setupState) {
@@ -97,6 +96,7 @@ void handleSetupIdle() {
   }
 }
 
+#ifdef KEYPAD_INPUT
 long lastHeldReaction;
 const int minHoldDelay = 100;
 
@@ -128,6 +128,7 @@ void handleSetupHeldKeys() {
     }
   }
 }
+#endif
 
 void resetSetupMode() {
   setupActive = false;
@@ -136,11 +137,12 @@ void resetSetupMode() {
 
 void setupLoop() {
   if (pressedKey == 0) {
+#ifdef KEYPAD_INPUT
     handleSetupHeldKeys();    
+#endif
     handleSetupIdle();
     return;
   }
-  Serial.print(F("Keychar: ")); Serial.println((int)pressedKey);
   currentKey = keyTranslation[pressedKey];
   setupHandleKey();
 }

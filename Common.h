@@ -859,7 +859,6 @@ class NumberInput {
     }
 
     void handleKeyPressed();
-    void handleIdle();
 
     virtual void clear();
     virtual void reset() {};
@@ -874,7 +873,6 @@ class NumberInput {
     }
     virtual void  finished(int) {}
     virtual void  cancelled();
-    virtual void  showIdle(int) {}
     virtual void displayCurrent(int) {}
     void display();
 
