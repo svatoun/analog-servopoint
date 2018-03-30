@@ -262,6 +262,12 @@ void ActionRef::saveTo(int pos) {
   ptr = NULL;
 }
 
+void ActionRef::print(String& s) {
+  s += F("i:"); s.concat(index);
+  s.concat(F(" ptr:")); s.concat(String((int)ptr, HEX));
+  s.concat(' '); a().print(s);
+}
+
 void Action::load(int index) {
   int eeaddr = eeaddr_actionTable + 1 + index * sizeof(Action);
   EEPROM.get(eeaddr, *this);

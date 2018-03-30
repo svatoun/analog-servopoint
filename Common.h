@@ -317,6 +317,7 @@ public:
   void makeLast() { 
     current.makeLast(); 
   }
+  void print(String &s);
 };
 
 struct ServoActionData {
@@ -604,6 +605,7 @@ class Executor {
     void handleWait(Action* action);
     static bool isBlocked(int index);
 
+    static void printQ(const ExecutionState& q);
   public:
     Executor();
 
@@ -646,9 +648,10 @@ struct ScheduledItem {
 
 class Scheduler2 : public Processor, public ScheduledProcessor {
   static ScheduledItem work[];
-  static byte bottom;
-  static byte count;
+  static byte scheduledBottom;
+  static byte scheduledCount;
   int v;
+  static void printQ();
 public:
   Scheduler2() : Processor() {}
   static void boot();

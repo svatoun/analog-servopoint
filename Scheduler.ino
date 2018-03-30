@@ -3,8 +3,8 @@ Scheduler2 scheduler;
 
 long baseMillis = 0;
 
-byte Scheduler2::bottom = 0;
-byte Scheduler2::count = 0;
+byte Scheduler2::scheduledBottom = 0;
+byte Scheduler2::scheduledCount = 0;
 
 #define MILLIS_SCALE_FACTOR 50
 #define MILLIS_FIXUP_THRESHOLD 15000
@@ -38,7 +38,7 @@ void WaitActionData::print(String& s) {
   switch (waitType) {
     case wait:
       s += F("WAT:");
-      s += waitTime * 50;
+      s += waitTime;
       break;
     default:
       s += F("WAT:err");
@@ -47,56 +47,71 @@ void WaitActionData::print(String& s) {
 }
 
 bool Scheduler2::schedule(unsigned int timeout, ScheduledProcessor* callback, unsigned int data) {
-  if (count >= MAX_SCHEDULED_ITEMS) {
+  if (scheduledCount >= MAX_SCHEDULED_ITEMS) {
     return false;
   }
   if (callback == NULL) {
     return false;
   }
-  ScheduledItem* item = work + bottom;
-  if (count == 0) {
+  ScheduledItem* item = work + scheduledBottom;
+  if (debugSchedule) {
+    Serial.print(F("Sched-T:")); Serial.print(timeout); Serial.print(F(" CB:")); Serial.print((int)callback, HEX); Serial.print(F(" D:")); Serial.println(data, HEX);
+    Serial.print(F("Bot:")); Serial.println(scheduledBottom);
+  }
+  if (scheduledCount == 0) {
     baseMillis = currentMillis;
+    if (debugSchedule) {
+      Serial.print(F("BMil:")); Serial.print(baseMillis);
+    }
   }
   long x = (currentMillis - baseMillis) / MILLIS_SCALE_FACTOR;
   x += timeout;
-  if (count > 0) {
-    ScheduledItem* maxItem = work + count;
+  if (debugSchedule) {
+    Serial.print(F("T:")); Serial.println(x);
+  }
+  if (scheduledCount > 0) {
+    const ScheduledItem* maxItem = work + scheduledCount;
     while (item < maxItem) {
       if (item->timeout > x) {
-        memmove(item + 1, item, (maxItem - item - 1) * sizeof(ScheduledItem));
+        memmove(item + 1, item, (maxItem - item) * sizeof(ScheduledItem));
         break;
       }
       item++;
     }
   }
   ScheduledItem nItem(x, callback, data);
-  if (x > 65535) {
+  if (x > 32767) {
     return;
   }
   int id = item - work;
   *item = nItem;
-  count++;
+  scheduledCount++;
   item = work;
-  for (int i = 0; i < count; i++) {
-    item++;
+  if (debugSchedule) {
+    Serial.print(F("Sched@")); Serial.println(id);
   }
+  printQ();
   return true;
 }
 
 void Scheduler2::timeout(unsigned int data) {
-  ExecutionState& s = (ExecutionState&)data;
+  ExecutionState& s = (ExecutionState&)*((ExecutionState*)data);
+  if (debugSchedule) {
+    Serial.print(F("SchFinQ:")); Serial.println(data, HEX);
+    Serial.print(F("A:")); Serial.println(s.action.i());
+  }
   Executor::finishAction2(s);
 }
 
 void Scheduler2::schedulerTick() {
-  if (count == 0) {
+  if (scheduledCount == 0) {
     return;
   }
   int delta = (currentMillis - baseMillis) / MILLIS_SCALE_FACTOR;
 
   ScheduledItem* item = work;
   signed char idx;
-  for (idx = 0; idx < count; idx++) {
+  for (idx = 0; idx < scheduledCount; idx++) {
     if (item->timeout > delta) {
       break;
     }
@@ -105,6 +120,10 @@ void Scheduler2::schedulerTick() {
   if (idx == 0) {
     // check if baseMillis is not TOO low
     if (delta > MILLIS_FIXUP_THRESHOLD) {
+      item = work + scheduledCount - 1;
+      if (debugSchedule) {
+        Serial.print(F("Fixup:")); Serial.println(delta);
+      }
       while (item >= work) {
         item->timeout -= delta;
         item--;
@@ -113,26 +132,43 @@ void Scheduler2::schedulerTick() {
     }
     return;
   }
-  bottom = idx;
-
+  
+  scheduledBottom = idx;
+  if (debugSchedule) {
+    Serial.print(F("Exp:")); Serial.println(idx);
+  }
   ScheduledItem *expired = work;
   for (signed char x = 0; x < idx; x++) {
+    if (debugSchedule) {
+      Serial.print('#'); Serial.println(x);
+    }
     ScheduledProcessor* cb = expired->callback;
     if (cb != NULL) {
       cb->timeout(expired->data);
     }
     expired++;
   }
-  count -= idx;
-  memmove(work, expired, count * sizeof(ScheduledItem));
-  bottom = 0;
+  scheduledCount -= idx;
+  memmove(work, expired, scheduledCount * sizeof(ScheduledItem));
+  scheduledBottom = 0;
+  printQ();
+}
+
+void Scheduler2::printQ() {
+  if (debugSchedule) {
+    for (int i = 0; i < scheduledCount; i++) {
+      const ScheduledItem& s = work[i];
+      Serial.print(F("I:")); Serial.print(i); Serial.print('\t');
+      Serial.print(F("T:")); Serial.print(s.timeout); Serial.print(F(" D:")); Serial.println(s.data, HEX);
+    }
+  }
 }
 
 void Scheduler2::cancel(ScheduledProcessor* callback, unsigned int data) {
   ScheduledItem* item = work;
-  for (int id = 0; id < count; id++) {
+  for (int id = 0; id < scheduledCount; id++) {
       if ((item->callback == callback) && (item->data == data)) {
-        int l = count - id - 1;
+        int l = scheduledCount - id - 1;
         memmove(item, item + 1, l * sizeof(ScheduledItem));
         return;
       }
@@ -172,7 +208,8 @@ Processor::R Scheduler2::processAction2(ExecutionState& s) {
       s.wait = true; s.waitNext = false;
       return Processor::R::finished;  
     case WaitActionData::wait:
-      schedule(this, wad.computeDelay(), &s);
+      schedule(wad.waitTime, this, &s);
+      return Processor::R::blocked;
       break;
   }
 }
@@ -203,7 +240,7 @@ void waitCommand(String& s) {
           return;
         }
         wad.waitType = WaitActionData::wait;
-        wad.waitTime = n / 50;
+        wad.waitTime = n;
         break;
     }
   }
