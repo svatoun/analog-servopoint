@@ -149,6 +149,7 @@ bool Command::processAll(int input, boolean state) {
       }
       return true;
     }
+    found = true;
     if (debugInput) {
       Serial.print(F("Found command:" ));  Serial.print((int)c, HEX);
       Serial.print(" ");
@@ -189,7 +190,6 @@ const Command* Command::find(int input, boolean state, const Command* from) {
     if (c.input == input) {
         boolean ok;
         byte t = c.trigger;
-        Serial.println(t);
         switch (t) {
             case cmdOff:
                 ok = (state == false);
