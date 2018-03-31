@@ -4,6 +4,11 @@ byte setupServoRight;
 byte setupServoSpeed;
 signed char setupServoOutput;
 
+byte servoInputState = 0;
+int minValue = 0;
+int maxValue = 1000;
+byte *valTarget = NULL;
+int adjStep = 1;
 int lastSelectedNumber;
 int selectedNumber;
 int typedNumber = -1;
@@ -12,60 +17,10 @@ boolean shown;
 boolean wasCancel;
 byte digitCount;
 
-const int showSelectedServoTime = 2000;
-
 int setupServoIndex = -1;
 
-const int blinkServo[] = { 250, 250, 1000, 250, 0 };
 
-class InputServoPos : public NumberInput {
-  boolean left;
-  public:
-  InputServoPos(boolean aLeft) : NumberInput(0, 180), left(aLeft) {
-    selectedNumber = getValue();
-  }
-
-  virtual int getValue() override;
-  virtual int setValue(int v) override;
-  virtual int incValue(int v, int inc) override;
-  virtual void finished(int value) override;
-  virtual void displayCurrent(int selected) override;
-};
-
-
-class InputServoNumber : public NumberInput {
-  public:
-  InputServoNumber() : NumberInput(1, MAX_SERVO) {}
-
-  virtual void finished(int value) override;
-};
-
-class InputServoSpeed : public NumberInput {
-  public:
-  InputServoSpeed() : NumberInput(1, MAX_SPEED) {}
-
-  virtual void finished(int speed) override;
-  void displayCurrent(int selected) override;
-  void cancelled() override;
-  int getValue() override;
-};
-
-int InputServoPos::getValue() {
-  if (left) {
-    return setupServoLeft;
-  } else {
-    return setupServoRight;
-  }
-}
-
-int InputServoPos::setValue(int v) {
-  return ServoConfig::value(v);
-}
-
-int InputServoPos::incValue(int v, int inc) {
-  return ServoConfig::change(v, inc);
-}
-
+#ifdef NUMBERINPUT
 void InputServoPos::finished(int value) {
   if (left) {
     Serial.print(F("LEFT: ")); Serial.println(value);
@@ -89,22 +44,6 @@ void InputServoNumber::finished(int value) {
       return;
     }
     startSetupServo(value - 1);
-}
-
-void startSetupServo(int value) {
-    setupServoIndex = value;
-    ServoConfig tmp;
-    tmp.load(value);
-    setupServoLeft = tmp.left();
-    setupServoRight = tmp.right();
-    setupServoSpeed = tmp.speed();
-    setupServoOutput = tmp.output();
-//    setupServoConfig = tmp;
-    Serial.print(F("Configuring ")); Serial.println(setupServoIndex);
-    setupState = servoSetLeft;
-    NumberInput::set(new InputServoPos(true));
-    numberInput->display();
-    Serial.print(F("Adj left:")); Serial.println(numberInput->getValue());
 }
 
 void InputServoPos::displayCurrent(int selectedPos) {
@@ -151,25 +90,6 @@ void InputServoSpeed::displayCurrent(int n) {
   executor.playNewAction();
 }
 
-/*
-void enterSetupServo0() {
-    setupServoIndex = -1;
-    adjustCallback = NULL;
-    setupState = servoSelect;
-    NumberInput::set(new InputServoNumber());
-}
-
-void enterSetupServo() {
-    // read EEPROM into the servo config
-//    eeBlockRead('S', eeaddr_servoConfig, &servoConfig[0], sizeof(servoConfig));
-    if (debugControl) {
-      Serial.print(F("Entering servo setup"));
-    }
-    makeLedAck(&blinkServo[0]);
-    enterSetupServo0();
-}
-*/
-
 void NumberInput::display() {
   displayCurrent(selectedNumber);
 }
@@ -183,6 +103,7 @@ void NumberInput::clear() {
 }
 
 void NumberInput::cancelled() {
+  overrideSpeed = -1;
   enterSetup();
 }
 
@@ -199,6 +120,7 @@ int NumberInput::acceptTypedNumber() {
   typedNumber = -1;
   return 1;
 }
+
 
 void NumberInput::handleKeyPressed() {
   boolean prevCancel = wasCancel;
@@ -312,6 +234,180 @@ void NumberInput::handleKeyPressed() {
   }
 }
 
+#endif
+
+void startSetupServo(int value) {
+    setupServoIndex = value;
+    ServoConfig tmp;
+    tmp.load(value);
+    setupServoLeft = tmp.left();
+    setupServoRight = tmp.right();
+    setupServoSpeed = tmp.speed();
+    setupServoOutput = tmp.output();
+//    setupServoConfig = tmp;
+    if (debugServo) {      
+      Serial.print(F("Configuring ")); Serial.println(setupServoIndex + 1);
+    }
+    setupState = servoSetLeft;
+    processKeyInput = true;
+    servoInputState = 0;
+    handleInputFinished();
+}
+
+void displayCurrent() {
+  clearNewCommand();
+  Action a1;
+  ServoActionData& sd = a1.asServoAction();
+
+  switch (servoInputState) {
+    case 0:
+    case 1:
+    case 2:
+      Serial.print(F("Pos: ")); Serial.println(selectedNumber);
+      sd.move(setupServoIndex, selectedNumber);
+      addNewCommand(a1);
+      executor.playNewAction();
+      return;
+    case 3:
+      Serial.print(F("Speed: ")); Serial.println(selectedNumber);
+      overrideSpeed = selectedNumber - 1;
+      sd.moveLeft(setupServoIndex);
+      addNewCommand(a1);
+      sd.moveRight(setupServoIndex);
+      addNewCommand(a1);
+      executor.playNewAction();
+      return;
+    default:
+      return;
+  }
+}
+
+void handleInputCancelled() {
+  enterSetup();
+}
+
+void handleInputReset() {
+  if (valTarget != NULL) {
+    selectedNumber = *valTarget;  
+    if (servoInputState >= 3) {
+      selectedNumber++;
+    }
+  }
+}
+
+void commitServoInput() {
+    setupServoSpeed = selectedNumber - 1;
+    overrideSpeed = -1;
+    // Persist in EEPROM
+    ServoConfig tmp(setupServoLeft, setupServoRight, setupServoSpeed, setupServoOutput);
+    tmp.save(setupServoIndex);
+    servoEEWriteSetup();
+    enterSetup();
+}
+
+void handleInputFinished() {
+  if (valTarget != NULL) {
+    *valTarget = selectedNumber;
+  }
+  if (debugServo) {
+    Serial.print("KIfin:"); Serial.print(selectedNumber); Serial.println(servoInputState);
+  }
+  switch (servoInputState) {
+    case 0:
+      minValue = 0;
+      maxValue = 180;
+      adjStep = ServoConfig::servoPwmStep;
+      valTarget = &setupServoLeft;
+
+      Serial.print(F("Adj left: ")); 
+      break;
+    case 1:
+      Serial.print(F("LEFT: ")); Serial.println(selectedNumber);
+      minValue = 0;
+      maxValue = 180;
+      adjStep = ServoConfig::servoPwmStep;
+      valTarget = &setupServoRight;
+
+      Serial.print(F("Adj right: ")); 
+      break;
+    case 2:
+      Serial.print(F("RIGHT: ")); Serial.println(selectedNumber);
+      minValue = 1;
+      maxValue = 8;
+      adjStep = 1;
+      valTarget = &setupServoSpeed;
+  
+      Serial.print(F("Adj speed: ")); 
+      break;
+      
+    case 3:
+      Serial.print(F("SPEED: ")); Serial.println(selectedNumber);
+      commitServoInput();
+      return;
+    default:
+      handleInputCancelled();
+      return;
+  }
+  selectedNumber = *valTarget;
+  servoInputState++;
+  if (servoInputState >= 3) {
+    selectedNumber++;
+  }
+  Serial.println(selectedNumber);
+  lastSelectedNumber = selectedNumber;
+  displayCurrent();
+}
+
+void handleKeyInput() {
+  boolean prevCancel = wasCancel;
+  boolean ok = true;
+
+  wasCancel = currentKey == keychar_cancel;
+  switch (currentKey) {
+    case keychar_cancel:
+      if (!prevCancel) {
+        Serial.print(F("\nCancel\n"));
+        handleInputReset();
+        break;
+      } else {
+        if (debugControl) {
+          Serial.print(F("Abort\n"));
+        }
+        handleInputCancelled();
+        return;
+      }
+    case keychar_plus:
+      if (debugServo) {
+        Serial.println("KIPlus");
+      }
+      selectedNumber += adjStep;
+      break;
+    case keychar_minus:
+      if (debugServo) {
+        Serial.println("KIMinus");
+      }
+      selectedNumber -= adjStep;
+      break;
+
+    case keychar_ok:
+      handleInputFinished();
+      return;
+  }
+  if (selectedNumber > maxValue) {
+    selectedNumber = maxValue;
+    ok = false;
+  } else if (selectedNumber < minValue) {
+    selectedNumber = minValue;
+    ok = false;
+  }
+  if (debugServo) {
+    Serial.print("KIfin:"); Serial.print(selectedNumber); Serial.println(lastSelectedNumber);
+  }
+  if (lastSelectedNumber != selectedNumber) {
+    displayCurrent();
+    lastSelectedNumber = selectedNumber;
+  }
+}
 void rangeCommand(String& l) {
   int index = servoNumber(l);
   int left = nextNumber(l);
@@ -376,6 +472,7 @@ void commandServoFeedback(String& s) {
   tmp.save(index - 1);
   Serial.print(F("Servo ")); Serial.print(index); Serial.print(F(" output ")); Serial.println(out);
 }
+
 
 bool lastNewline;
 

@@ -37,7 +37,8 @@ const char char_setupAction = '2';
 void resetState() {
   executor.clear();
   adjustCallback = NULL;
-  NumberInput::set(NULL);
+//  NumberInput::set(NULL);
+  processKeyInput = false;
   overrideSpeed = -1;
 }
 
@@ -91,6 +92,7 @@ void handleSetupIdle() {
   if (numberInput != NULL) {
     return;
   }
+  if (processKeyInput) {
   switch (setupState) {
     case servoSelect: 
     case servoSetLeft: 
@@ -149,13 +151,17 @@ void setupLoop() {
   setupHandleKey();
 }
 
+extern void handleKeyInput();
+
 void setupHandleKey() {
   if (currentKey == keychar_resetSetup) {
     enterSetup();
     return;
   }  
-  if (numberInput != NULL) {
-    numberInput->handleKeyPressed();
+//  if (numberInput != NULL) {
+//    numberInput->handleKeyPressed();
+  if (processKeyInput) {
+    handleKeyInput();
     return;
   }
 }

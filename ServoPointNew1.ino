@@ -275,9 +275,6 @@ boolean eeBlockRead(byte magic, int eeaddr, void* address, int size) {
   }
 }
 
-long lastOnePressed = 0;
-int onePressedCount = 0;
-
 bool setKeyPressed(int k, bool val) {
   byte o = k >> 3;
   byte mask = 0xfe << (k & 0x07);
@@ -318,16 +315,6 @@ void processKeyCallback(const Key2& k, char c) {
 void loop() {
   currentMillis = millis();
   pressedKey = keypad.getKey();
-  if (pressedKey == 1) {
-    if (currentMillis - lastOnePressed < 500) {
-      if (onePressedCount++ == 4) {
-        enterSetup();
-      }
-    } else {
-      lastOnePressed = currentMillis;
-      onePressedCount = 0;
-    }
-  }
   if (setupActive) {
     setupLoop();
   }
@@ -360,15 +347,6 @@ int defineCommand(const Command& def, int no) {
         break;
       }
     }
-    /*
-    for (int i = 0; i < MAX_COMMANDS; i++) {
-      Command& c = commands[i];
-      if (c.available()) {
-        no = i;
-        break;
-      }
-    }
-    */
   }
   if (no == -1) {
     if (debugCommands) {

@@ -497,8 +497,6 @@ struct  OutputActionPWMData {
     byte  command :   3;
     OutputActionData::OutputFunction  fn : 3;    // output function style
     byte  outputIndex : 5;    // up to 32 outputs
-
-    
 };
 static_assert (sizeof(OutputActionPWMData) <= 2, "Output data too large");
 
@@ -618,10 +616,6 @@ class Executor {
        Queue of commands to be executed. Actually pointers to (immutable) action chains.
     */
     static ExecutionState queue[QUEUE_SIZE];
-    byte  timeoutCount;
-
-    long lastMillisTick;
-    int waitIndex;
 
     void handleWait(Action* action);
     static bool isBlocked(int index);
@@ -871,44 +865,6 @@ extern boolean shown;
 extern boolean wasCancel;
 extern byte digitCount;
 
-class NumberInput {
-  public:
-    const int minValue;
-    const int maxValue;
-  public:
-    NumberInput(int aMin, int aMax) : minValue(aMin), maxValue(aMax) {
-      selectedNumber = aMin;
-      lastTypedMillis = 0;
-      shown = false;
-      wasCancel = false;
-      digitCount = 0;
-      lastSelectedNumber = aMin - 1;
-    }
-
-    void handleKeyPressed();
-
-    virtual void clear();
-    virtual void reset() {};
-    virtual int getValue() {
-      return selectedNumber;
-    }
-    virtual int setValue(int a) {
-      return a;
-    }
-    virtual int incValue(int v, int step) {
-      return v + step;
-    }
-    virtual void  finished(int) {}
-    virtual void  cancelled();
-    virtual void displayCurrent(int) {}
-    void display();
-
-    static void set(NumberInput* input);
-
-  protected:
-    int acceptTypedNumber();
-};
-
 struct LineCommand {
   const char* cmd;
   void (*handler)(String& );
@@ -944,15 +900,7 @@ struct ModuleChain {
 //      End keypad extension
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-class NumberInput;
-NumberInput *numberInput = NULL;
-
-void NumberInput::set(NumberInput * input) {
-  if (numberInput != NULL) {
-    delete numberInput;
-  }
-  numberInput = input;
-}
+boolean processKeyInput = false;
 
 const int CURRENT_DATA_VERSION = 0x05;
 
