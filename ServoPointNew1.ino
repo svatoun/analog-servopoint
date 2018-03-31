@@ -158,13 +158,7 @@ void handleAckLed() {
   digitalWrite(LED_ACK, ackLedState ? HIGH : LOW);
 }
 
-void stopAll() {
-  // clear out servos
-  ServoProcessor::clearAll();
-}
-
 //////////////////////////////////////////////////////////////////////////
-void servoSetup();
 
 void initializeHW() {
   keypad.digitalPins(A5);
@@ -176,7 +170,6 @@ void initializeHW() {
   pinMode(LED_ACK, OUTPUT);
   digitalWrite(LED_ACK, LOW);
   analogReference(DEFAULT);
-  //  servoSetup();
 }
 
 void checkInitEEPROM() {
@@ -184,7 +177,7 @@ void checkInitEEPROM() {
   if (savedVer == CURRENT_DATA_VERSION) {
     return;
   }
-  Serial.println(F("Obsolete or missing data in EEPROM, reinitializing"));
+  Serial.println(F("Obsolete EEPROM, reinitializing"));
   ModuleChain::invokeAll(ModuleCmd::reset);
   ModuleChain::invokeAll(ModuleCmd::eepromSave);
   EEPROM.write(eeaddr_version, CURRENT_DATA_VERSION);
@@ -361,6 +354,13 @@ int defineCommand(const Command& def, int no) {
       return -1;
     }
   } else {
+    for (const Command* ptr = commands; ptr < commands + MAX_COMMANDS; ptr++) {
+      if (ptr->available()) {
+        no = (ptr - commands);
+        break;
+      }
+    }
+    /*
     for (int i = 0; i < MAX_COMMANDS; i++) {
       Command& c = commands[i];
       if (c.available()) {
@@ -368,6 +368,7 @@ int defineCommand(const Command& def, int no) {
         break;
       }
     }
+    */
   }
   if (no == -1) {
     if (debugCommands) {
@@ -378,7 +379,7 @@ int defineCommand(const Command& def, int no) {
   Command& c = commands[no];
   if (!c.available()) {
       if (debugCommands) {
-        Serial.print(F("Found matching command ")); Serial.println(no);
+        Serial.print(F("Existing command ")); Serial.println(no);
       }
       replaceCommand(c, def);
       return no;
