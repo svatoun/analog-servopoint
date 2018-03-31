@@ -105,6 +105,7 @@ void processLineCommand() {
       if (debugInfra) {
         Serial.print(F("Remainder of command ")); Serial.println(line);
       }
+      line.toLowerCase();
       c.handler(line);
       return;
     }
