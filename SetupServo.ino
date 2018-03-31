@@ -151,6 +151,7 @@ void InputServoSpeed::displayCurrent(int n) {
   executor.playNewAction();
 }
 
+/*
 void enterSetupServo0() {
     setupServoIndex = -1;
     adjustCallback = NULL;
@@ -167,6 +168,7 @@ void enterSetupServo() {
     makeLedAck(&blinkServo[0]);
     enterSetupServo0();
 }
+*/
 
 void NumberInput::display() {
   displayCurrent(selectedNumber);
@@ -215,7 +217,7 @@ void NumberInput::handleKeyPressed() {
         lastTypedMillis = 0;
       } else {
         if (debugControl) {
-          Serial.print(F("Cancel number entry\n"));
+          Serial.print(F("Cancel\n"));
         }
         numberInput = NULL;
         cancelled();
@@ -224,7 +226,7 @@ void NumberInput::handleKeyPressed() {
       break;
     case keychar_plus: {
       if (debugControl) {
-        Serial.print(F("Number increased"));
+        Serial.print(F("Inc."));
       }
       if (!acceptTypedNumber()) {
         return;
@@ -241,7 +243,7 @@ void NumberInput::handleKeyPressed() {
     }
     case keychar_minus: {
       if (debugControl) {
-        Serial.print(F("Number decreased"));
+        Serial.print(F("Dec."));
       }
       if (!acceptTypedNumber()) {
         return;
@@ -301,8 +303,8 @@ void NumberInput::handleKeyPressed() {
       break;
   }
   if (debugControl) {
-    Serial.print(F("Selected number: ")); Serial.println(selectedNumber);
-    Serial.print(F("Typed number: ")); Serial.println(typedNumber);
+    Serial.print(F("Sel: ")); Serial.println(selectedNumber);
+    Serial.print(F("Typed: ")); Serial.println(typedNumber);
   }
   if (lastSelectedNumber != selectedNumber) {
     displayCurrent(selectedNumber);
@@ -318,12 +320,8 @@ void rangeCommand(String& l) {
   if (index < 1) {
     return;
   }
-  if (left < 0 || left > 180) {
-    Serial.println(F("\nInvalid left pos"));
-    return;
-  }
-  if (right < 0 || right > 180) {
-    Serial.println(F("\nInvalid right pos"));
+  if (left < 0 || left > 180 || right < 0 || right > 180) {
+    Serial.println(F("\nBad Pos"));
     return;
   }
   index--;
@@ -335,7 +333,7 @@ void rangeCommand(String& l) {
   if (l.length() > 0) {
     spd = nextNumber(l);
     if (spd < 1 || spd > 8) {
-      Serial.println(F("\nInvalid speed"));
+      Serial.println(F("\nBad speed"));
       return;
     }
     spd--;
