@@ -13,6 +13,7 @@ void Scheduler2::boot() {
   Executor::addProcessor(&scheduler);
   registerLineCommand("WAT", &waitCommand);
   registerLineCommand("WAC", &waitConditionCommand);
+//  registerLineCommand("CAN", &cancelCommand);
   Action::registerDumper(Instr::wait, &printWaitTime);
 }
 
@@ -151,6 +152,9 @@ void Scheduler2::schedulerTick() {
   scheduledCount -= idx;
   memmove(work, expired, scheduledCount * sizeof(ScheduledItem));
   scheduledBottom = 0;
+  if (debugSchedule) {
+    Serial.println("EndTick");
+  }
   printQ();
 }
 
@@ -165,11 +169,18 @@ void Scheduler2::printQ() {
 }
 
 void Scheduler2::cancel(ScheduledProcessor* callback, unsigned int data) {
+  if (debugSchedule) {
+    Serial.print(F("SchCancel:")); Serial.print((int)callback, HEX); Serial.print(':'); Serial.println(data, HEX);
+  }
   ScheduledItem* item = work;
   for (int id = 0; id < scheduledCount; id++) {
       if ((item->callback == callback) && (item->data == data)) {
-        int l = scheduledCount - id - 1;
-        memmove(item, item + 1, l * sizeof(ScheduledItem));
+        int c = (MAX_SCHEDULED_ITEMS - id) - 1;
+        memmove(item, item + 1, c * sizeof(ScheduledItem));
+        scheduledCount--;
+        if (debugSchedule) {
+          Serial.print(F("Del:")); Serial.print(id); Serial.print(','); Serial.println(scheduledCount);
+        }
         return;
       }
       item++;

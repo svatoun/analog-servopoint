@@ -1,6 +1,8 @@
 #ifndef __defs_h__
 #define __defs_h__
 
+#define SERVOS
+
 const int ROWS = 4;
 const int COLS = 4;
 
@@ -64,8 +66,10 @@ const int MAX_SERVO = 16;           // # of controlled servos
 const int MAX_OUTPUT = 64;          // # of on/off outputs from the shift register
 const int MAX_INPUT_BUTTONS = 16;   // # of input buttons
 const int MAX_SPEED = 8;            // servo speed
+const int MAX_FLASH = 4;
 
 const int MAX_SCHEDULED_ITEMS = 16;
+const int MAX_PENDING_FLASHES = 8;
 
 const int OUTPUT_BIT_SIZE = (MAX_OUTPUT + 7) / 8;
 
@@ -94,6 +98,7 @@ const int debugInfra = 0;
 const int debugInput = 0;
 const int debugPower = 0;
 const int debugSchedule = 0;
+const int debugFlash = 0;
 #else
 const int debugControl = 0;
 const int debugExecutor = 0;
@@ -105,6 +110,7 @@ const int debugInfra = 0;
 const int debugInput = 0;
 const int debugPower = 0;
 const int debugSchedule = 0;
+const int debugFlash = 0;
 #endif
 
 /**

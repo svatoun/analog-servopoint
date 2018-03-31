@@ -61,21 +61,24 @@ void enterSetup() {
     resetTerminal();
     return;
   }
+#ifdef KEYPAD_INPUT
   setupActive = 1;
   makeLedAck(&blinkSetup[0]);
   if (debugControl) {
     Serial.print(F("Entering setup"));
   }
   resetState();
+#endif
 }
 
+#ifdef KEYPAD_INPUT
 void handleInitialMenu() {
   if (debugControl) {
     Serial.print(F("Got key: ")); Serial.println(currentKey);
   }
   switch (currentKey) {
     case char_setupServo:
-      enterSetupServo();
+//      enterSetupServo();
       break;
 
     default:
@@ -96,7 +99,6 @@ void handleSetupIdle() {
   }
 }
 
-#ifdef KEYPAD_INPUT
 long lastHeldReaction;
 const int minHoldDelay = 100;
 
@@ -139,8 +141,8 @@ void setupLoop() {
   if (pressedKey == 0) {
 #ifdef KEYPAD_INPUT
     handleSetupHeldKeys();    
-#endif
     handleSetupIdle();
+#endif
     return;
   }
   currentKey = keyTranslation[pressedKey];

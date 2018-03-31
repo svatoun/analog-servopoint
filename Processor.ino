@@ -1,3 +1,7 @@
+byte  Output::lastOutputState[OUTPUT_BIT_SIZE];
+byte  Output::newOutputState[OUTPUT_BIT_SIZE];
+byte  Output::activeOutputs[OUTPUT_BIT_SIZE];
+
 static Processor*  Executor::processors[MAX_PROCESSORS];
 
     /**
@@ -12,8 +16,8 @@ void bootProcessors() {
 }
 
 Output::Output() {
-  for (byte *os = newOutputState, *los = lastOutputState; los < (lastOutputState + OUTPUT_BIT_SIZE); os++, los++) {
-    *os = *los = 0;
+  for (byte *os = newOutputState, *los = lastOutputState, *act = activeOutputs; los < (lastOutputState + OUTPUT_BIT_SIZE); os++, los++, act++) {
+    *act = *os = *los = 0;
   }
 }
 
@@ -29,6 +33,16 @@ void Output::boot() {
   flush();
 //  digitalWrite(shiftOutDisable, LOW);
 }
+
+void Output::setOutputActive(byte o, boolean state) {
+  if (state) {
+    activeOutputs[o / 8] |= (1 << (o % 8));
+  } else {
+    activeOutputs[o / 8] &= ~(1 << (o % 8));
+  }
+}
+
+
 
 void Output::set(int index) {
   if (debugOutput) {
@@ -90,6 +104,9 @@ bool Output::isSet(int index) {
   return lastOutputState[index / 8] & (1 << (index % 8));
 }
 
+boolean Output::isActive(int index) {
+  return activeOutputs[index / 8] & (1 << (index % 8));
+}
 //
 ////////////////////////////////////////////////////////////////////////////
 //
@@ -179,14 +196,6 @@ bool Executor::isBlocked(int index) {
   return (index < 0) || (index >= QUEUE_SIZE) || queue[index].blocked;
 }
 
-void Executor::finishAction(const ExecutionState& state) {
-  if ((&state < queue) || (&state >= (queue + QUEUE_SIZE))) {
-    return;
-  }
-  int handle = &state - queue;
-  finishAction(&state.action.a(), handle);
-}
-
 void Executor::finishAction(const Action* action, int index) {
   if (index < 0 || index >= QUEUE_SIZE) {
     return;
@@ -202,6 +211,9 @@ void Executor::printQ(const ExecutionState& q) {
 }
 
 void Executor::finishAction2(ExecutionState& q) {
+  if ((&state < queue) || (&state >= (queue + QUEUE_SIZE))) {
+    return;
+  }
   if (debugExecutor) {
     Serial.print(F("Fin:")); Serial.println(q.action.i(), HEX);
   }

@@ -1,5 +1,14 @@
 //
 ///////////////////////////// Servo Movement //////////////////////////////
+
+int overrideSpeed = -1;
+extern ServoConfig setupServoConfig;
+extern byte setupServoLeft;
+extern byte setupServoRight;
+extern byte setupServoSpeed;
+extern signed char setupServoOutput;
+
+#ifdef SERVOS
 ServoProcessor  processors[2];  
 
 /**
@@ -10,13 +19,6 @@ ModuleChain servoModule("Servo", 0, &servoModuleHandler);
 
 byte  servoPositions[MAX_SERVO]; 
 boolean enable = false;
-int overrideSpeed = -1;
-
-extern ServoConfig setupServoConfig;
-extern byte setupServoLeft;
-extern byte setupServoRight;
-extern byte setupServoSpeed;
-extern signed char setupServoOutput;
 
 
 void servoSetup() {
@@ -176,6 +178,7 @@ void initServoFeedback(int pos, const ServoConfig& cfg) {
   pos -= l;
   bool b = (pos > -3) && (pos < 3);
   output.setBit(out, b);
+  Output::setOutputActive(out, b);
 }
 
 void startServos1To8() {
@@ -249,7 +252,7 @@ void handleServoMovement() {
   }
 }
 
-ServoProcessor::ServoProcessor() : servoIndex(noservo), actionIndex(noaction), blockedAction(NULL), blockedState(NULL), servoMask(0)
+ServoProcessor::ServoProcessor() : servoIndex(noservo), blockedState(NULL), servoMask(0)
 {
 }
 
@@ -309,8 +312,6 @@ void ServoProcessor::clear() {
   }
   ctrl.detach();
   servoIndex = noservo;
-  actionIndex = noaction;
-  blockedAction = NULL;
   blockedState = NULL;
   enable = false;
   targetPosCounter = 0;
@@ -325,9 +326,10 @@ void ServoProcessor::moveFinished() {
   }
   if (servoOutput >= 0) {
     output.setBit(servoOutput, setOutputOn);
+    Output::setOutputActive(servoOutput, setOutputOn);
   }
   if (blockedState != NULL) {
-    executor.finishAction(*blockedState);
+    executor.finishAction2(*blockedState);
   }
   clear();
 }
@@ -343,8 +345,7 @@ boolean ServoProcessor::isCompatibleWith(int otherIndex) {
 }
 
 boolean ServoProcessor::cancel(const ExecutionState& s) {
-  const Action& action = s.action.a();
-  if (blockedAction == &action) {
+  if (blockedState == &s) {
     clear();
     return true;
   } else {
@@ -407,6 +408,7 @@ Processor::R ServoProcessor::processAction2(ExecutionState& state) {
     setOutputOn = true;
     if (servoOutput >= 0) {
       output.setBit(servoOutput, false);
+      Output::setOutputActive(servoOutput, false);
     }
     target = data.targetPosition();
   }
@@ -433,7 +435,6 @@ Processor::R ServoProcessor::processAction2(ExecutionState& state) {
   ctrl.write(curAngle);
 
   if (state.wait) {
-    blockedAction = &action;
     blockedState = &state;
     return blocked;
   } else {
@@ -459,10 +460,10 @@ void moveCommand(String& line) {
   Action a;
   ServoActionData& d = a.asServoAction();  
   switch (c) {
-    case 'l': case 'L':
+    case 'l': 
       d.moveLeft(sNumber);
       break;  
-    case 'r': case 'R':
+    case 'r': 
       d.moveRight(sNumber);
       break;
     default:
@@ -477,4 +478,10 @@ void moveCommand(String& line) {
   prepareCommand();
   addCommandPart(a);
 }
+
+#else
+
+void servoEEWriteSetup() {}
+
+#endif
 

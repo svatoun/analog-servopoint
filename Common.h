@@ -189,7 +189,25 @@ struct ServoConfig {
   void save(int idx);
 };
 
+struct FlashConfig {
+  unsigned int onDelay : 8;
+  unsigned int offDelay : 8;
+  unsigned int flashCount : 7;
+
+  FlashConfig() : onDelay(0), offDelay(0), flashCount(0) {}
+
+  boolean empty() {
+    return onDelay == 0;
+  }
+
+  void save(int index);
+  void load(int index);
+
+  void print(String &s, int index);
+};
+
 extern ServoConfig  setupServoConfig;
+extern FlashConfig  flashConfig[];
 extern int setupServoIndex;
 
 typedef void (*ActionRenumberFunc)(int, int);
@@ -403,8 +421,10 @@ struct OutputActionData {
     };
     OutputFunction  fn : 3;    // output function style
     byte  outputIndex : 5;    // up to 32 outputs
-    byte  pulseLen : 8;
-
+    byte  pulseLen : 8;       // or flash index
+    boolean nextInvert : 1;
+    
+    // 3 bits remain
   public:
     void  turnOn(int output) {
       command = onOff;
@@ -431,6 +451,14 @@ struct OutputActionData {
       pulseLen = 0;
     }
 
+    void flash(int out, int fl, boolean inv) {
+      command = onOff;
+      fn = outFlash;
+      outputIndex = out;
+      pulseLen = fl;
+      nextInvert = inv;
+    }
+
     int pulseDelay() {
       return pulseLen;
     }
@@ -451,6 +479,12 @@ struct OutputActionData {
         case outOn: s.concat('H'); break;
         case outOff: s.concat('L'); break;
         case outToggle: s.concat('T'); break;
+        case outFlash: 
+          s.concat('F'); s.concat(pulseLen); 
+          if (nextInvert) {
+            s.concat(":I");
+          }
+          break;
         default: s.concat('E'); break;
       }
     }
@@ -468,63 +502,24 @@ struct  OutputActionPWMData {
 };
 static_assert (sizeof(OutputActionPWMData) <= 2, "Output data too large");
 
-#if 0
-struct PulseActionData {
-  byte  last    :   1;
-  byte  command :   3;
-
-  byte  outputIndex : 5;
-  byte  units      : 2;
-  byte  pulseDelay : 4;
-
-  void pulse(int t) {
-    command = ::pulse;
-    if (t < 16) {
-      units = 0;
-      pulseDelay = t;
-    } else if (t < 80) {
-      units = 1;
-      pulseDelay = t / 5;
-    } else if (t < 160) {
-      units = 2;
-      pulseDelay = t / 10;
-    } else {
-      return;
-    }
-  }
-
-  int getPulseDelay() {
-    switch (units) {
-      case 0:
-        return pulseDelay;
-      case 1:
-        return pulseDelay * 5;
-      case 2:
-        return pulseDelay * 10;
-    }
-  }
-
-  void print(String& s) {
-    s.concat("PLS:"); s.concat(outputIndex); s.concat(":"); s.concat(getPulseDelay() * 10);
-  }
-};
-#endif
-
 struct WaitActionData {
   byte  last    : 1;
   byte  command : 3;
 
 
   enum {
-    indefinitely = 0,
-    finishOnce = 1,
-    alwaysFinish = 2,
-    noWait,
-    inputOn,
-    inputOff,
-    commandInactive,
-    wait,
+    indefinitely = 0,   // wait indefinitely, until cancelled
+    finishOnce = 1,     // wait for next command to finish
+    alwaysFinish = 2,   // wait for all commands to finish
+    noWait,             // do not wait for commands
     
+    wait,               // wait a specified time
+
+    // conditions
+    inputOn,            // wait for input to become on
+    inputOff,           // wait for input to become off
+    commandInactive,    // wait for command to become inactive
+
     timerError
   };
   byte waitType : 3;
@@ -542,6 +537,32 @@ struct WaitActionData {
 
 static_assert (sizeof(WaitActionData) <= sizeof(Action), "Wait action data too long");
 static_assert (WaitActionData::timerError <= 8, "Too many wait types");
+
+struct ControlActionData {
+  byte  last    : 1;
+  byte  command : 3;
+
+
+  enum ControlType {
+    cancel  = 0,
+    jumpIf,
+    exec,
+
+    controlError
+  };
+  enum ConditionType {
+    output,
+    servo,
+    cmdActive
+  };
+
+  ControlType control : 2;
+  ConditionType cond : 2;
+  boolean positive : 1;
+  byte  condIndex;
+};
+
+static_assert (sizeof(ControlActionData) <= sizeof(Action), "Control action too long");
 
 struct ExecutionState;
 
@@ -611,6 +632,21 @@ class Executor {
 
     static void boot();
 
+    static signed char stateNo(const ExecutionState& s) {
+      if (&s < queue) {
+        return -1;
+      }
+      if (&s >= (queue + QUEUE_SIZE)) {
+        return -1;
+      }
+      return (&s - queue) + 1;
+    }
+    static ExecutionState* state(signed char n) {
+      if (n < 1 || n >= QUEUE_SIZE) {
+        return NULL;
+      }
+      return queue + (n - 1);
+    }
     static void finishAction2(ExecutionState& state);
     static void addProcessor(Processor*);
     static void process();
@@ -619,7 +655,6 @@ class Executor {
     //void unblockAction(const Action**);
     static void blockAction(int index);
     static void finishAction(const Action* action, int index);
-    static void finishAction(const ExecutionState& state);
 
     static void playNewAction();
     static void schedule(const ActionRef&, int id, boolean inverse);
@@ -685,9 +720,7 @@ class ServoProcessor : public Processor {
     byte targetAngle;
     byte servoSpeed;   // how many milliseconds should the servo command last before changing the angle;
     long switchMillis;
-    byte actionIndex;
-    const Action* blockedAction;
-    const ExecutionState* blockedState;
+    ExecutionState* blockedState;
     byte targetPosCounter;
     signed char servoOutput;
     bool setOutputOn;
@@ -727,45 +760,50 @@ class ServoProcessor : public Processor {
 */
 class Output {
   private:
-    byte  lastOutputState[OUTPUT_BIT_SIZE];
-    byte  newOutputState[OUTPUT_BIT_SIZE];
-
+    static byte  lastOutputState[OUTPUT_BIT_SIZE];
+    static byte  newOutputState[OUTPUT_BIT_SIZE];
+    static byte  activeOutputs[OUTPUT_BIT_SIZE];
   public:
     Output();
 
-    void boot();
+    static void boot();
 
     /**
        Sets the corresponding bit up
     */
-    void  set(int outputIndex);
+    static void  set(int outputIndex);
 
     /**
        Clears the appropriate bit
     */
-    void  clear(int outputIndex);
+    static void  clear(int outputIndex);
 
-    void  setBit(int outputIndex, boolean value) {
+    static void  setBit(int outputIndex, boolean value) {
       if (value) { set(outputIndex); } else { clear(outputIndex); }
     }
 
     /**
        Sets all bits to zero, immediately. Resets internal state.
     */
-    void  clearAll();
+    static void  clearAll();
 
     /**
        Determines if an output is set.
     */
-    bool  isSet(int index);
+    static bool  isSet(int index);
+
+    static bool  isActive(int index);
 
     /**
        Commits pending changes.
     */
-    void  commit();
+    static void  commit();
 
-    void  flush();
+    static void  flush();
+  
+    static void setOutputActive(byte o, boolean state);
 };
+
 
 /**
    Finally command describes what input command corresponds to what actions. Each command can execute one or more actions,
@@ -812,21 +850,6 @@ struct Command {
       return input == i && trigger == t;
     }
 
-/*
-    boolean matches(int i, boolean o) {
-      if (input != i) {
-        return;
-      }
-      byte t = trigger;
-      if (t == cmdOn && !o) {
-        return false;
-      }
-      if (t == cmdOff && o) {
-        return false;
-      }
-      return true;
-    }
-*/
     static const Command* find(int input, boolean state, const Command* from);
     static bool processAll(int input, boolean state);
 
@@ -836,7 +859,6 @@ struct Command {
 
     void print(String& s);
 
-//    Command& operator =(const Command& other);
 };
 
 static_assert (sizeof(Command) <= 3, "Command too long");
@@ -932,7 +954,7 @@ void NumberInput::set(NumberInput * input) {
   numberInput = input;
 }
 
-const int CURRENT_DATA_VERSION = 0x04;
+const int CURRENT_DATA_VERSION = 0x05;
 
 const int eeaddr_version = 0x00;
 const int eeaddr_servoConfig = 0x02;
@@ -948,6 +970,9 @@ static_assert (eeaddr_actionTable >= eeaddr_servoPositions + 2 + MAX_SERVO * siz
 const int eeaddr_commandTable = (eeaddr_actionTable + MAX_ACTIONS * sizeof(Action)) + 2;
 static_assert (eeaddr_commandTable >= eeaddr_actionTable + 2 + MAX_ACTIONS * sizeof(Action), "EEPROM data overflow");
 
-const int eeaddr_top = (eeaddr_commandTable + MAX_COMMANDS * sizeof(Command)) + 2;
-static_assert (eeaddr_top < 700, "Too large data for EEPROM");
+const int eeaddr_flashTable = (eeaddr_commandTable + MAX_COMMANDS * sizeof(Command)) + 2;
+static_assert (eeaddr_flashTable >= eeaddr_commandTable + 2 + MAX_COMMANDS * sizeof(Command), "EEPROM flash overflow");
+
+const int eeaddr_top = (eeaddr_flashTable + MAX_FLASH * sizeof(FlashConfig)) + 2;
+static_assert (eeaddr_top < 800, "Too large data for EEPROM");
 
