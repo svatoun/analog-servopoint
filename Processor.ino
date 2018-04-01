@@ -265,6 +265,7 @@ void Executor::process() {
       q.action.next();
       continue;
     }
+    boolean known = false;
     if (q.processor != NULL) {
       Processor::R result = q.processor->pending(q.action.a(), &q.data);
       if (result == Processor::finished) {
@@ -295,15 +296,13 @@ void Executor::process() {
       Processor::R res;
 
       res = proc->processAction2(q);
-      if (res == Processor::ignored) {
-          res = proc->processAction(a, i);
+      if (debugExecutor) {
+        Serial.print(F("EXE:")); Serial.println(res);
       }
       if (res == Processor::ignored) {
         continue;
       }
-      if (debugExecutor) {
-        Serial.print(F("EXE:")); Serial.println(res);
-      }
+      known = true;
       if (!q.action.isEmpty()) {
         switch (res) {
           case Processor::blocked:
@@ -315,9 +314,20 @@ void Executor::process() {
             unblock(q);
             q.action.next();
             break;
+          case Processor::full:
+            known = true;
+            continue;
         }
       }
       break;
+    }
+    if (!known) {
+      Serial.println(F("Discard: ")); 
+      String s;
+      q.action.a().print(s);
+      Serial.println(s);
+      unblock(q);
+      q.action.next();
     }
   }
 }

@@ -1,8 +1,8 @@
-static ScheduledItem Scheduler2::work[MAX_SCHEDULED_ITEMS];
 Scheduler2 scheduler;
 
 long baseMillis = 0;
 
+static ScheduledItem Scheduler2::work[MAX_SCHEDULED_ITEMS];
 byte Scheduler2::scheduledBottom = 0;
 byte Scheduler2::scheduledCount = 0;
 
@@ -237,10 +237,6 @@ Processor::R Scheduler2::processAction2(ExecutionState& s) {
       return Processor::R::blocked;
       break;
   }
-}
-
-Processor::R Scheduler2::processAction(const Action& a, int handle) {
-  return Processor::R::ignored;
 }
 
 void waitCommand() {

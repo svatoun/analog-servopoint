@@ -353,10 +353,6 @@ boolean ServoProcessor::cancel(const ExecutionState& s) {
   }
 }
 
-Processor::R ServoProcessor::processAction(const Action& a, int h) {
-  return ignored;
-}
-
 Processor::R ServoProcessor::processAction2(ExecutionState& state) {
   const Action& action = state.action.a();
   if (action.command != servo) {

@@ -22,9 +22,6 @@ class OutputProcessor : public Processor, public ScheduledProcessor {
     OuputProcessor() {
     }
     R processAction2(ExecutionState&) override;
-    R processAction(const Action& ac, int handle) {
-      return Processor::ignored;
-    }
     void timeout(unsigned int data) override;
     void tick() override;
     void clear() override;
@@ -41,9 +38,6 @@ class FlashProcessor : public Processor, public ScheduledProcessor {
     FlashProcessor() {
     }
     R processAction2(ExecutionState&) override;
-    R processAction(const Action& ac, int handle) {
-      return Processor::ignored;
-    }
     void timeout(unsigned int data) override;
     void tick() override;
     void clear() override;

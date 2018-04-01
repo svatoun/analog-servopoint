@@ -581,12 +581,10 @@ class Processor {
     enum R {
       ignored,
       finished,
-      blocked
+      blocked,
+      full
     };
-    virtual R processAction2(ExecutionState& state) {
-      return ignored;
-    }
-    virtual R processAction(const Action& ac, int handle) = 0;
+    virtual R processAction2(ExecutionState& state) = 0;
     virtual void tick() {};
     virtual void clear() {}
     virtual boolean cancel(const ExecutionState& ac) = 0;
@@ -692,7 +690,6 @@ class Scheduler2 : public Processor, public ScheduledProcessor {
   static ScheduledItem work[];
   static byte scheduledBottom;
   static byte scheduledCount;
-  int v;
   static void printQ();
 public:
   Scheduler2() : Processor() {}
@@ -700,7 +697,6 @@ public:
   void schedulerTick();
   virtual void timeout(unsigned int data) override;
   virtual R processAction2(ExecutionState& state) override;
-  virtual R processAction(const Action& ac, int handle) override;
   virtual bool cancel(const ExecutionState& ac) override;
   static bool schedule(unsigned int timeout, ScheduledProcessor* callback, unsigned int data);
   static void cancel(ScheduledProcessor* callback, unsigned int data);
@@ -751,7 +747,6 @@ class ServoProcessor : public Processor {
     void clear();                     // stop working
     static void clearAll();
     R processAction2(ExecutionState& state) override;
-    R processAction(const Action& ac, int handle) override;
     boolean cancel(const ExecutionState& ac) override;
 
     boolean available() {
