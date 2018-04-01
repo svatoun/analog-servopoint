@@ -177,7 +177,7 @@ void Executor::schedule(const ActionRef& ref, int id, boolean invert) {
 void Executor::schedule(const ActionRef& ref, int id, boolean invert, boolean wait) {
   if (debugExecutor) {
     Serial.print(F("ExAction: ")); 
-    printBuffer[0] = 0;
+    initPrintBuffer();
     ref.print(printBuffer);
     Serial.print(F("Ref: ")); Serial.println(printBuffer);
   }  
@@ -216,7 +216,7 @@ void Executor::printQ(const ExecutionState& q) {
   Serial.print(F(" A:")); Serial.print((int)&a, HEX); Serial.print(F(" / ")); 
       Serial.print(q.action.i(), HEX); Serial.print(F(", C:")); Serial.print(a.command);
   Serial.print('-');
-  printBuffer[0] = 0;
+  initPrintBuffer();
   a.print(printBuffer);
   Serial.println(printBuffer);
 }
@@ -307,7 +307,10 @@ void Executor::process() {
         switch (res) {
           case Processor::blocked:
             block(q, proc);
-            Serial.print(F("BL:")); printQ(q); // Serial.print(q.action.i(), HEX); Serial.print(F(", command = ")); Serial.println(a.command);
+            if (debugExecutor) {
+              Serial.print(F("BL:")); 
+              printQ(q); 
+            }
             break;
           case Processor::finished:
             // the 'wait' flag is not reset.
@@ -323,7 +326,7 @@ void Executor::process() {
     }
     if (!known) {
       Serial.println(F("Discard: ")); 
-      printBuffer[0] = 0;
+      initPrintBuffer();
       q.action.a().print(printBuffer);
       Serial.println(printBuffer);
       unblock(q);

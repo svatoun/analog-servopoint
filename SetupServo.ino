@@ -438,7 +438,7 @@ void rangeCommand() {
   tmpConfig.setRight(right);
   tmpConfig.setSpeed(spd);
   
-  printBuffer[0] = 0;
+  initPrintBuffer();
   tmpConfig.print(index, printBuffer);
   Serial.println(printBuffer);
   tmpConfig.save(index);

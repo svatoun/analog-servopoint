@@ -13,6 +13,7 @@ bool setupActive = false;
 char pressedKey;
 
 extern byte state[];
+extern char printBuffer[];
 
 bool isKeyPressed(int k) {
   byte o = k >> 3;
@@ -20,6 +21,22 @@ bool isKeyPressed(int k) {
 }
 
 bool setKeyPressed(int k, boolean s);
+
+ __attribute__((always_inline)) char* append(char* &ptr, char c) {
+  *(ptr++) = c;
+  return ptr;
+}
+
+__attribute__((noinline)) char* initPrintBuffer() {
+  printBuffer[0] = 0;
+  return printBuffer;
+}
+
+__attribute__((noinline)) char *printNumber(char *out, int no, int base) {
+  itoa(no, out, base);
+  return out + strlen(out);
+}
+
 
 enum Instr {
   none = 0,

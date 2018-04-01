@@ -65,13 +65,13 @@ void dumpCommands() {
     if (c.available()) {
       continue;
     }
-    printBuffer[0] = 0;
+    initPrintBuffer();
     c.print(printBuffer);
     Serial.println(printBuffer);
     int actionIndex = c.actionIndex;
     ActionRef ref = Action::getRef(actionIndex);
     while (!ref.isEmpty()) {
-      printBuffer[0] = 0;
+      initPrintBuffer();
       ref.a().print(printBuffer);
       Serial.println(printBuffer);
       ref.next();
@@ -154,8 +154,8 @@ bool Command::processAll(int input, boolean state) {
     found = true;
     if (debugInput) {
       Serial.print(F("Found command:" ));  Serial.print((int)c, HEX);
-      Serial.print(" ");
-      printBuffer[0] = 0;
+      Serial.print(' ');
+      initPrintBuffer();
       c->print(printBuffer);
       Serial.println(printBuffer);
     }
@@ -227,9 +227,16 @@ char triggerChars[] = { 'C', 'O', 'T', 'A', 'B', 'R', 'E', 'E' };
 
 void Command::print(char* out) {
   char t = triggerChars[trigger];
-  sprintf(out, "DEF:%d:%d:%c", id + 1, input + 1, t);
+  strcpy_P(out, PSTR("DEF:"));
+  out += strlen(out);
+  out = printNumber(out, id + 1, 10);
+  append(out, ':');
+  out = printNumber(out, input + 1, 10);
+  append(out, ':');
+  append(out, t);
+  *(out) = 0;
   if (!wait) {
-    strcat(out, ":N");
+    strcat_P(out, PSTR(":N"));
   }
 }
 

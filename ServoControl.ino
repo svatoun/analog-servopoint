@@ -21,13 +21,24 @@ byte  servoPositions[MAX_SERVO];
 boolean enable = false;
 
 void ServoConfig::print(int id, char* out) {
-  sprintf(out, "RNG:%d:%d:%d:%d", id, left(), right(), servoSpeed + 1);
+  strcat_P(out, PSTR("RNG:"));
+  out += strlen(out);
+  out = printNumber(out, id, 10);
+  append(out, ':');
+  out = printNumber(out, left(), 10);
+  append(out, ':');
+  out = printNumber(out, right(), 10);
+  append(out, ':');
+  out = printNumber(out, servoSpeed + 1, 10);
   int p = output();
   if (p == -1) {
     return;
   }
+  strcat_P(out, PSTR("\nSFB:"));
   out += strlen(out);
-  sprintf(out, "\nSFB:%d:%d", id, p + 1);
+  out = printNumber(out, id, 10);
+  append(out, ':');
+  printNumber(out, p + 1, 10);
 }
 
 void servoSetup() {
@@ -76,10 +87,15 @@ void servoSetup() {
 
 void printServoAction(const Action& a, char* out) {
   const ServoActionData& sa = a.asServoAction();
+  strcat_P(out, PSTR("MOV:"));
+  out += strlen(out);
+  out = printNumber(out, sa.servoIndex + 1, 10);
+  append(out, ':');
   if (sa.isPredefinedPosition()) {
-    sprintf(out, "MOV:%d:%c", sa.servoIndex + 1, sa.isLeft() ? 'L' : 'R');
+    append(out, sa.isLeft() ? 'L' : 'R');
+    *out = 0;
   } else {
-    sprintf(out, "MOV:%d:%d", sa.servoIndex + 1, sa.targetPosition());
+    printNumber(out, sa.targetPosition(), 10);
   }
 }
 
@@ -90,7 +106,7 @@ void servoDump() {
     if (tmp.isEmpty()) {
       continue;
     }
-    printBuffer[0] = 0;
+    initPrintBuffer();
     tmp.print(i + 1, printBuffer);
     Serial.println(printBuffer);
   }

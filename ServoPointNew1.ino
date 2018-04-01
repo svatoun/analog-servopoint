@@ -22,6 +22,7 @@ byte state[(maxId + 7) / 8];
 
 Command commands[MAX_COMMANDS];
 
+char printBuffer[80];
 
 /**
    Serves to build up a new command during setup. Takes priority over any actions

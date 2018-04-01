@@ -142,17 +142,24 @@ void outputInit() {
 char fnCodes[] = { '1', '0', 'T', 'P', 'F', 'E', 'E', 'E' };
 
 void OutputActionData::print(char* out) {
-  byte fn = fn;
-  if (fn >= OutputActionData::outPulse) {
+  byte _fn = fn;
+  strcat_P(out, PSTR("OUT:"));
+  out += strlen(out);
+  out = printNumber(out, outputIndex + 1, 10);
+  append(out, ':');
+  append(out, fnCodes[_fn]);
+  *out = 0;
+  if (_fn >= OutputActionData::outPulse) {
     byte d = pulseDelay();
-    if (fn == OutputActionData::outPulse) {
+    if (_fn == OutputActionData::outPulse) {
       if (d == 0) {
         return;
       }
     } else {
       d++;
     }
-    sprintf(out, "OUT:%d:%c:%d", outputIndex + 1, fnCodes[fn], d);
+    append(out, ':');
+    out = printNumber(out, d, 10);
   }
 }
 
@@ -326,7 +333,7 @@ Processor::R FlashProcessor::processAction2(ExecutionState& state) {
       Serial.print('I');
     }
     Serial.println();
-    printBuffer[0] = 0;
+    initPrintBuffer();
     fc.print(printBuffer, f + 1);
     Serial.println(printBuffer);
   }
@@ -491,7 +498,15 @@ void FlashConfig::load(int idx) {
 }
 
 void FlashConfig::print(char *out, int index) {
-  sprintf(out, "FLS:%d:%d:%d:%d", index, onDelay, offDelay, flashCount);
+  strcat_P(out, PSTR("FLS:"));
+  out += strlen(out);
+  out = printNumber(out, index, 10);
+  append(out, ':');
+  out = printNumber(out, onDelay, 10);
+  append(out, ':');
+  out = printNumber(out, offDelay, 10);
+  append(out, ':');
+  out = printNumber(out, flashCount, 10);
 }
 
 void flashCommand() {
@@ -516,7 +531,7 @@ void flashCommand() {
   cfg.offDelay = offD;
   cfg.flashCount = cnt;
 
-  printBuffer[0] = 0;
+  initPrintBuffer();
   cfg.print(printBuffer, (&cfg - flashConfig) + 1);
   Serial.println(printBuffer);
 }

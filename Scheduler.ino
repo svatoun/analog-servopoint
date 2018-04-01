@@ -37,7 +37,9 @@ void printWaitTime(const Action& a, char* out) {
 void WaitActionData::print(char* out) {
   switch (waitType) {
     case wait:
-      sprintf(out, "WAT:%d", waitTime);
+      strcat_P(out, PSTR("WAT:"));
+      out += strlen(out);
+      printNumber(out, waitTime, 10);
       break;
     default:
       strcpy_P(out, PSTR("WAT:err"));

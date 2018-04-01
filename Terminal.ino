@@ -328,7 +328,7 @@ void commandDefine() {
   definedCommand = c;
   definedCommand.id = no;
 
-  printBuffer[0] = 0;
+  initPrintBuffer();
   definedCommand.print(printBuffer);
   Serial.println(printBuffer);
   commandDef = 0;
@@ -341,12 +341,17 @@ void commandFinish() {
   if (commandDef < 0) {
     Serial.print(F("Empty command"));
     resetTerminal();
+    return;
   }
 
   int idx = defineCommand(definedCommand, commandNo);
   if (interactive) {
-    Serial.print(F("Defined command #")); Serial.println(idx);
-    Serial.print(F("Free RAM: ")); Serial.println(freeRam());
+    if (idx < 0) {
+      Serial.println(F("Error"));
+    } else {
+      Serial.print(F("Defined command #")); Serial.println(idx);
+      Serial.print(F("Free RAM: ")); Serial.println(freeRam());
+    }
   }
   commandEepromSave();
   resetTerminal();
@@ -402,14 +407,17 @@ void commandExecute() {
 
 void commandDumpEEProm() {
   Serial.println(F("EEPROM Dump:"));
-  char buffer[24 + 4];
+  char buffer[24 + 4 + 1];
   int cnt = 0;
   char *ptr = buffer;
   *ptr = 0;
   for (int eea = 0; eea < eeaddr_top; eea++) {
     int r = EEPROM.read(eea);
-    sprintf(ptr, "%02x ", r);
-    ptr += strlen(ptr);
+    if (r < 0x10) {
+      *(ptr++) = '0';
+    }
+    ptr = printNumber(ptr, r, 16);
+    append(ptr, ' ');
     cnt++;
     if (cnt %32 == 0) {
       Serial.println(buffer);
