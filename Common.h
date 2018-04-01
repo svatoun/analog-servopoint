@@ -214,6 +214,7 @@ typedef void (*ActionRenumberFunc)(int, int);
 
 struct Action;
 struct ActionRef;
+struct ControlActionData;
 /**
    Action defines the step which should be executed.
 */
@@ -283,6 +284,9 @@ struct Action {
     }
     WaitActionData& asWaitAction() {
       return (WaitActionData&)(*this);
+    }
+    ControlActionData& asControlAction() {
+      return (ControlActionData&)(*this);
     }
 
     void save(int idx);
@@ -542,22 +546,30 @@ struct ControlActionData {
 
 
   enum ControlType {
-    cancel  = 0,
-    jumpIf,
-    exec,
+    ctrlCancel  = 0,
+    ctrlJumpIf,
+    ctrlExec,
 
     controlError
   };
   enum ConditionType {
-    output,
-    servo,
-    cmdActive
+    condOutput,
+    condServo,
+    condCommand
   };
 
   ControlType control : 2;
-  ConditionType cond : 2;
-  boolean positive : 1;
-  byte  condIndex;
+  ConditionType cond : 3;
+  boolean invert : 1;
+  byte  condIndex : 6;
+  signed char jmpTarget : 5;
+
+  void cancel(int c) {
+    control = ctrlCancel;
+    condIndex = c;
+  }
+
+  void print(String& s);
 };
 
 static_assert (sizeof(ControlActionData) <= sizeof(Action), "Control action too long");
@@ -652,6 +664,7 @@ class Executor {
 
     static void playNewAction();
     static void schedule(const ActionRef&, int id, boolean inverse);
+    static void schedule(const ActionRef&, int id, boolean inverse, boolean wait);
 //    void schedulePtr(const Action*, int id);
     static boolean cancelCommand(int id);
 };
@@ -865,9 +878,12 @@ extern boolean shown;
 extern boolean wasCancel;
 extern byte digitCount;
 
+extern char inputLine[];
+extern char *inputPos;
+
 struct LineCommand {
   const char* cmd;
-  void (*handler)(String& );
+  void (*handler)();
 
   LineCommand() : cmd(NULL), handler(NULL) {}
 };

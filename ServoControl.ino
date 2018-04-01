@@ -449,14 +449,13 @@ void ServoProcessor::setupSelector(int index) {
   digitalWrite(servoSelectB, (index & 0b10) ? HIGH : LOW);
 }
 
-void moveCommand(String& line) {
-  int sNumber = nextNumber(line);
-  if (sNumber > MAX_SERVO) {
-    Serial.print(F("Invalid servo number"));
+void moveCommand() {
+  int sNumber = servoNumber();
+  if (sNumber < 1) {
     return;
   }
   sNumber--;
-  char c = line.charAt(0);
+  const char c = *inputPos;
   Action a;
   ServoActionData& d = a.asServoAction();  
   switch (c) {
@@ -466,10 +465,13 @@ void moveCommand(String& line) {
     case 'r': 
       d.moveRight(sNumber);
       break;
+    case 0:
+      Serial.println(F("Bad pos"));
+      return;
     default:
-      int v = nextNumber(line);
+      int v = nextNumber();
       if (v < 0 || v > 180) {
-        Serial.println(F("Invalid position"));
+        Serial.println(F("Bad pos"));
         return;
       }
       d.move(sNumber, v);

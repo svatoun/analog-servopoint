@@ -2,19 +2,26 @@
 ModuleChain terminalModule("Terminal", 30, &terminalModuleHadler);
 
 const int MAX_LINE = 60;
-String line;
 void (* charModeCallback)(char);
 boolean interactive = true;
 int8_t commandDef = -1;
 Command definedCommand;
 int commandNo = -1;
-
 const int maxLineCommands = 40;
+
+const int maxInputLine = MAX_LINE;
+char inputLine[maxInputLine + 1];
+char *inputPos = inputLine;
+char *inputEnd = inputLine;
 
 LineCommand lineCommands[maxLineCommands];
 
+void clearInputLine() {
+  inputLine[0] = 0;
+  inputEnd = inputPos = inputLine;  
+}
+
 void setupTerminal() {
-  line.reserve(MAX_LINE);
 //  registerLineCommand("HLP", &commandHelp);
   registerLineCommand("ECH", &commandInteractive);
   registerLineCommand("RST", &commandReset);
@@ -33,7 +40,7 @@ void setupTerminal() {
 }
 
 /*
-void commandHelp(String&s) {
+void commandHelp() {
   Serial.println(F("HELP - Available commands:"));
   for (int i = 0; i < maxLineCommands; i++) {
     LineCommand &c = lineCommands[i];
@@ -60,14 +67,14 @@ void terminalModuleHadler(ModuleCmd cmd) {
 }
 
 void resetTerminal() {
-  line = "";
+  clearInputLine();
   charModeCallback = NULL;
   commandDef = -1;;
   clearNewCommand();
 }
 
 
-void registerLineCommand(const char* aCmd, void (*aHandler)(String&)) {
+void registerLineCommand(const char* aCmd, void (*aHandler)(String& )) {
   for (int i = 0; i < maxLineCommands; i++) {
     if (lineCommands[i].handler == NULL) {
       lineCommands[i].cmd = aCmd;
@@ -78,9 +85,17 @@ void registerLineCommand(const char* aCmd, void (*aHandler)(String&)) {
 }
 
 void processLineCommand() {
-  int pos = line.indexOf(':');
-  if (pos == -1) {
-    pos = line.length();
+  inputEnd = inputPos;
+  char *pos = strchr(inputLine, ':');
+  if (pos == NULL) {
+    pos = inputEnd;
+    inputPos = pos;
+  } else {
+    *pos = 0;
+    inputPos = pos + 1;
+  }
+  if (debugInfra) {
+    Serial.print("Command: "); Serial.println(inputLine);
   }
   for (int i = 0; i < maxLineCommands; i++) {
     LineCommand &c = lineCommands[i];
@@ -88,27 +103,28 @@ void processLineCommand() {
       break;
     }
     const char *p = c.cmd;
-    for (int x = 0; x < pos && ((*p) != 0); x++, p++) {
-      char c = line.charAt(x);
-      if (c >= 'a' && c <= 'z') {
-        c -= ('a' - 'A');
+    const char *x = inputLine;
+    for (; (*p != 0) && (*x != 0); x++, p++) {
+      char e = *x;
+      if ((e >= 'a') && (e <= 'z')) {
+        e -= ('a' - 'A');
       }
-      if (c != *p) {
+      if (e != (*p)) {
         goto end;
       }
     }
-    if (*p == 0) {
-      if (debugInfra) {
-        Serial.print(F("Trying handler for command ")); Serial.println(c.cmd);
-      }
-      line.remove(0, pos + 1);
-      if (debugInfra) {
-        Serial.print(F("Remainder of command ")); Serial.println(line);
-      }
-      line.toLowerCase();
-      c.handler(line);
-      return;
+    if (*p != *x) {
+      goto end;
     }
+    if (debugInfra) {
+      Serial.print(F("Trying handler for command ")); Serial.println(c.cmd);
+    }
+    if (debugInfra) {
+      Serial.print(F("Remainder of command ")); Serial.println(inputPos);
+    }
+    c.handler();
+    return;
+
     end:
     ;
   }
@@ -132,67 +148,61 @@ void processTerminal() {
     }
     if (c == 0x7f || c == '\b') {
       Serial.write(c);
-      if (line.length() > 0) {
-        line.remove(line.length() - 1, 1);
+      if (inputPos > inputLine) {
+        inputPos--;
+        *inputPos = 0;
       }
       continue;
     }
     if (c == '\n' || c == '\r') {
       Serial.write("\r\n");
       processLineCommand();
-      line = "";
+      clearInputLine();
       continue;
     }
     Serial.write(c);
-    if (line.length() == MAX_LINE) {
+    if ((inputPos - inputLine) >= MAX_LINE) {
       continue;
     }
-    line.concat(c);
+    *inputPos = tolower(c);
+    inputPos++;
+    *inputPos = 0;
   }
 }
 
 int nextNumber(String& input) {
-  if (input.length() == 0) {
+  return nextNumber();
+}
+
+int nextNumber() {
+  if ((*inputPos) == 0) {
     return -2;
   }
-  int e = input.indexOf(':');
-  if (e == 0) {
-    input.remove(0, 1);
+  if ((*inputPos) == ':') {
+    inputPos++;
     return -3;
   }
-  char c = input.charAt(0);
+  char c = *inputPos;
   if (c < '0' || c > '9') {
     return -1;
   }
-  const String x;
   
-  if ( e == -1) {
-    x = input;
-    input = "";  
+  char *p = strchr(inputPos, ':');
+  if (p == NULL) {
+    p = inputEnd - 1;  
   } else {
-    x = input.substring(0, e);
-    input = input.substring(e + 1);
+    *p = 0;
   }
-  return x.toInt();
+  char *ne;
+  int val = atoi(inputPos);
+  inputPos = p + 1;
+  return val;
 }
 
-const String nextFragment(String& input) {
-  int e = input.indexOf(':');
-  const String x;
-  if ( e == -1) {
-    x = input;
-    input = "";  
-  } else {
-    x = input.substring(0, e);
-    input = input.substring(e + 1);
-  }
-  return x;
-}
-
-void commandInteractive(String& s) {
-  char c = (s.length() == 0) ? 'N' : s.charAt(0);
+void commandInteractive() {
+  char c = *inputPos;
   switch (c) {
-    case 'y': case 'Y':
+    case 'y': 
       interactive = true;
       break;
     default:
@@ -204,12 +214,12 @@ void commandInteractive(String& s) {
   }
 }
 
-void commandReset(String& s) {
+void commandReset() {
   void (*func)() = 0;
   func();
 }
 
-void commandBack(String& s) {
+void commandBack() {
   if (commandDef <= 0) {
     Serial.println(F("At start"));
     return;
@@ -219,7 +229,7 @@ void commandBack(String& s) {
   Serial.print(F("\n")); Serial.print(commandDef + 1, DEC); Serial.println(F(":>>"));
 }
 
-void commandCancel(String& s) {
+void commandCancel() {
   resetTerminal();
   Serial.println(F("\nAborted"));
 }
@@ -262,12 +272,12 @@ void addCommandPart(const Action& ac) {
   ++commandDef;
 }
 
-void commandDump(String& s) {
+void commandDump() {
   ModuleChain::invokeAll(ModuleCmd::dump);
 }
 
-void commandDefine(String& s) {
-  int no = nextNumber(s);
+void commandDefine() {
+  int no = nextNumber();
   if (no == -3) {
     no = Command::findFree();
     if (no < 0) {
@@ -282,46 +292,40 @@ void commandDefine(String& s) {
     return;
   }
   commandNo = no;
-  int btn = nextNumber(s);
+  int btn = nextNumber();
   if (btn < 1 || btn > MAX_INPUT_BUTTONS) {
     Serial.println(F("\nBad button"));
     return;
   }
   btn--;
   byte trigger = Command::cmdOn;
-  
-  if (s.length() > 0) {
-
-    switch (s.charAt(0)) {
-      case 'C': case 'c': case 'D': case 'd': case '1': case '+':
-        trigger = Command::cmdOn;
-        break;
-      case 'O': case 'o': case 'U': case 'u': case '0': case '-':
-        trigger = Command::cmdOff;
-        break;
-      case 'T': case 't': trigger = Command::cmdToggle; break;
-      case 'A': case 'a': trigger = Command::cmdOnCancel; break;
-      case 'B': case 'b': trigger = Command::cmdOffReverts; break;
-      case 'R': case 'r': trigger = Command::cmdOnReverts; break;
-      default:
-        Serial.println(F("Bad trigger"));
-        return;
-    }
-    if (s.length() > 1) {
-      if (s.charAt(1) != ':') {
-        Serial.println(F("\nBad state"));
-        return;
-      }
-      s.remove(0, 2);
-    } else {
-      s.remove(0, 1);
-    }
+  const char ch = *inputPos;
+  switch (ch) {
+    case 'c': case 'd': case '1': case '+':
+      trigger = Command::cmdOn;
+      break;
+    case 'o': case 'u': case '0': case '-':
+      trigger = Command::cmdOff;
+      break;
+    case 't': trigger = Command::cmdToggle; break;
+    case 'a': trigger = Command::cmdOnCancel; break;
+    case 'b': trigger = Command::cmdOffReverts; break;
+    case 'r': trigger = Command::cmdOnReverts; break;
+    default:
+      Serial.println(F("Bad trigger"));
+      return;
   }
   boolean wait = true;
-  if (s.length() == -1 || (s.length() > 1 && s.charAt(1) == ':')) {
-    if (s.charAt(0) == 'N' || s.charAt(0) == 'n') {
+  inputPos++;
+  if (*inputPos != 0) {
+    if (*inputPos != ':') {
+      Serial.println(F("\nBad state"));
+      return;
+    }
+    inputPos++;
+
+    if ((*inputPos != 0) || (*inputPos == 'n')) {
       wait = false;
-      s.remove(0,s.length() > 1 ? 2 : 1);
     }
   }
   Command c(btn, trigger, wait);
@@ -337,7 +341,7 @@ void commandDefine(String& s) {
   }
 }
 
-void commandFinish(String& s) {
+void commandFinish() {
   if (commandDef < 0) {
     Serial.print(F("Empty command"));
     resetTerminal();
@@ -352,8 +356,8 @@ void commandFinish(String& s) {
   resetTerminal();
 }
 
-void commandDelete(String& s) {
-  int no = nextNumber(s);
+void commandDelete() {
+  int no = nextNumber();
   if (no < 1 || no > MAX_COMMANDS) {
     Serial.println(F("Bad command"));
     return;
@@ -366,42 +370,41 @@ void commandDelete(String& s) {
     Serial.println(": NOP");
   }
 }
-void commandStatus(String& s) {
+void commandStatus() {
   ModuleChain::invokeAll(ModuleCmd::status);
 }
 
-void commandClear(String& s) {
+void commandClear() {
   ModuleChain::invokeAll(ModuleCmd::reset);
-  saveHandler(s);
-  commandReset(s);
+  saveHandler();
+  commandReset();
 }
 
-void commandExecute(String& s) {
-  int cmd = nextNumber(s);
+void commandExecute() {
+  int cmd = nextNumber();
   if (cmd < 1 || cmd >= MAX_INPUT_BUTTONS) {
     Serial.println(F("Bad input"));
     return;
   }
   boolean state = true;
   cmd--;
-  if (s.length() > 0) {
-    switch (s.charAt(0)) {
-      case 'C': case 'c': case 'D': case 'd': case '1': case '+':
-        state = true;
-        break;
-      case 'O': case 'o': case 'U': case 'u': case '0': case '-':
-        state = false;
-        break;
-      default:
-        Serial.println(F("Bad trigger"));
-        return;
-    }
+  const char ch = *inputPos;
+  switch (ch) {
+    case 'c': case 'd': case '1': case '+':
+      state = true;
+      break;
+    case 'o': case 'u': case '0': case '-':
+      state = false;
+      break;
+    default:
+      Serial.println(F("Bad trigger"));
+      return;
   }
   setKeyPressed(cmd, state);
   Command::processAll(cmd, state);
 }
 
-void commandDumpEEProm(String& s) {
+void commandDumpEEProm() {
   Serial.println(F("EEPROM Dump:"));
   String line;
   line.reserve(8 * 3 + 4);
@@ -435,7 +438,7 @@ enum PlayMode {
 
 byte playMode;
 
-void commandPlay(String& s) {
+void commandPlay() {
   playMode = playServo;
   charModeCallback = &playCharacterCallback;
 }

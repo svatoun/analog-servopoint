@@ -331,7 +331,7 @@ const int blinkSetup[] = { 500, 250, 500, 250, 500, 250, 0 };
 const int blinkError[] = { 1000, 250, 1000, 250, 0 };
 
 
-void saveHandler(String& l) {
+void saveHandler() {
   ModuleChain::invokeAll(ModuleCmd::eepromSave);
 }
 

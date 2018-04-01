@@ -408,10 +408,10 @@ void handleKeyInput() {
     lastSelectedNumber = selectedNumber;
   }
 }
-void rangeCommand(String& l) {
-  int index = servoNumber(l);
-  int left = nextNumber(l);
-  int right = nextNumber(l);
+void rangeCommand() {
+  int index = servoNumber();
+  int left = nextNumber();
+  int right = nextNumber();
 
   if (index < 1) {
     return;
@@ -426,8 +426,8 @@ void rangeCommand(String& l) {
 
   tmpConfig.load(index);
   int spd = tmpConfig.speed();
-  if (l.length() > 0) {
-    spd = nextNumber(l);
+  if ((*inputPos) != 0) {
+    spd = nextNumber();
     if (spd < 1 || spd > 8) {
       Serial.println(F("\nBad speed"));
       return;
@@ -444,18 +444,18 @@ void rangeCommand(String& l) {
   Serial.println(F("\nOK"));
 }
 
-int servoNumber(String& s) {
-  int index = nextNumber(s);
-  if (index < 0 || index > MAX_SERVO) {
+int servoNumber() {
+  int index = nextNumber();
+  if (index < 1 || index > MAX_SERVO) {
     Serial.print(F("Bad servo")); Serial.println(index);
     return -1;
   }
   return index;
 }
 
-void commandServoFeedback(String& s) {
-  int index = servoNumber(s);
-  int out = nextNumber(s);
+void commandServoFeedback() {
+  int index = servoNumber();
+  int out = nextNumber();
   if (index < 0) {
     return;
   }
@@ -476,8 +476,8 @@ void commandServoFeedback(String& s) {
 
 bool lastNewline;
 
-void commandCalibrate(String& s) {
-  int idx = servoNumber(s);
+void commandCalibrate() {
+  int idx = servoNumber();
   if (idx < 1) {
     Serial.print(F("Bad servo ")); 
     if (idx >= 0) {

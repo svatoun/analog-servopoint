@@ -82,6 +82,7 @@ const int MAX_PROCESSORS = 20;
 const int servoBase = 0;
 const int outputBase = 8;
 
+#define MILLIS_SCALE_FACTOR 50
 
 /**
  * If != 0, setup control routines will print diagnostic messages over serial line.

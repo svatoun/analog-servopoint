@@ -15,7 +15,7 @@ void commandModuleHandler(ModuleCmd cmd) {
       commandEepromSave();
       break;
     case status:
-      commandStatus();
+      displayCommandStatus();
       break;
     case dump:
       dumpCommands();
@@ -31,7 +31,7 @@ void commandEepromSave() {
     eeBlockWrite('C', eeaddr_commandTable, &commands[0], sizeof(commands));
 }
 
-void commandStatus() {
+void displayCommandStatus() {
   int actionCount = 0;
   Action tmp;
   for (int i = 0; i < MAX_ACTIONS; i++) {
@@ -102,35 +102,37 @@ void Command::execute(boolean keyPressed) {
   }
   int t = trigger;
   ActionRef aref = Action::getRef(actionIndex);
+  boolean w = wait;
+  boolean i = false;
   switch (t) {
     case cmdOn:
       if (!keyPressed) {
-        break;
+        return;
       }
     case cmdToggle:
-      executor.schedule(aref, id, false);
       break;
     case cmdOff:
-      if (!keyPressed) {
-        executor.schedule(aref, id, false);
+      if (keyPressed) {
+        return;
       }
       break;
     case cmdOnCancel:
       if (keyPressed) {
-        executor.schedule(aref, id, false);
       } else if (id != 0) {
         executor.cancelCommand(id);
+        return;
       }
       break;
     case cmdOffReverts:
       if (keyPressed) {
-        executor.schedule(aref, id, false);
       } else {
-        executor.schedule(aref, id, true);
+        i = true;
       }
       break;
+    default:
+      return;
   }
-//  executor.schedule(Action::getRef(actionIndex));
+  executor.schedule(aref, id, i, w);
 }
 
 bool Command::processAll(int input, boolean state) {

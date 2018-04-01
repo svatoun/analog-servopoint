@@ -171,6 +171,10 @@ void Executor::handleWait(Action* a) {
 }
 
 void Executor::schedule(const ActionRef& ref, int id, boolean invert) {
+  schedule(ref, id, invert, true);  
+}
+
+void Executor::schedule(const ActionRef& ref, int id, boolean invert, boolean wait) {
   if (debugExecutor) {
     Serial.print(F("ExAction: ")); 
     String s;
@@ -183,6 +187,7 @@ void Executor::schedule(const ActionRef& ref, int id, boolean invert) {
       q.action = ref;
       q.id = id;
       q.blocked = false;
+      q.waitNext = q.wait = wait;
       q.invert = invert;
       if (debugExecutor) {
         Serial.print(F("ExSched: ")); printQ(q); //Serial.print((st - queue)); Serial.print(F(" ")); Serial.println((int)&q.action, HEX);
@@ -206,12 +211,18 @@ void Executor::finishAction(const Action* action, int index) {
 void Executor::printQ(const ExecutionState& q) {
   int i = &q - queue;
   const Action& a = q.action.a();
-  Serial.print(i); Serial.print(F("@")); Serial.print((int)&q, HEX); Serial.print(F(" A:")); Serial.print((int)&a, HEX); Serial.print(F(" / ")); 
-      Serial.print(q.action.i(), HEX); Serial.print(F(", C:")); Serial.println(a.command);
+  Serial.print(i); Serial.print(F("@")); Serial.print((int)&q, HEX); 
+  Serial.print(F(" W:")); Serial.print(q.wait); Serial.print(q.waitNext);
+  Serial.print(F(" A:")); Serial.print((int)&a, HEX); Serial.print(F(" / ")); 
+      Serial.print(q.action.i(), HEX); Serial.print(F(", C:")); Serial.print(a.command);
+  Serial.print('-');
+  String s;
+  a.print(s);
+  Serial.println(s);
 }
 
 void Executor::finishAction2(ExecutionState& q) {
-  if ((&state < queue) || (&state >= (queue + QUEUE_SIZE))) {
+  if ((&q < queue) || (&q >= (queue + QUEUE_SIZE))) {
     return;
   }
   if (debugExecutor) {

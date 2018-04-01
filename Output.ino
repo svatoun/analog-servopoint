@@ -144,19 +144,36 @@ void printHexByte(String& buffer, int val) {
 }
 
 void outputInit() {
-  executor.addProcessor(&outputProcessor);
+  // flash must be BEFORE the output
   executor.addProcessor(&flashProcessor);
+  executor.addProcessor(&outputProcessor);
   registerLineCommand("OUT", &outputCommand);
   registerLineCommand("FLS", &flashCommand);
-  Action::registerDumper(servo, printOutputAction);
+  Action::registerDumper(onOff, printOutputAction);
 }
+
+char fnCodes[] = { '1', '0', 'T', 'P', 'F', 'E', 'E', 'E' };
 
 void printOutputAction(const Action& ac) {
-  
+  const OutputActionData& data = ac.asOutputAction();
+  byte fn = data.fn;
+  Serial.print(F("OUT:")); Serial.print(data.outputIndex + 1);
+  Serial.print(':'); Serial.print(fnCodes[fn]);
+  if (fn >= OutputActionData::outPulse) {
+    byte d = data.pulseDelay();
+    if (fn == OutputActionData::outPulse) {
+      if (d == 0) {
+        return;
+      }
+    } else {
+      d++;
+    }
+    Serial.print(':'); Serial.print(d);
+  }
 }
 
-void outputCommand(String& s) {
-  int n = nextNumber(s) - 1;
+void outputCommand() {
+  int n = nextNumber() - 1;
   if (n < 0 || n >= MAX_OUTPUT) {
     Serial.print(F("Bad output number"));
     return;
@@ -164,55 +181,57 @@ void outputCommand(String& s) {
   Action action;
   OutputActionData& outAction = action.asOutputAction();
   
-  if (s.length() == 0) {
-    outAction.turnOn(n);
-  } else {
-    char c = s.charAt(0);
-    switch (c) {
-      case '+': case '1': case 's': case 'u':
-        outAction.turnOn(n);
-        break;
-      case '-': case '0': case 'r': case 'd':DEF:
-        outAction.turnOff(n);
-        break;
-      case '*': case 't': 
-        outAction.toggle(n);
-        break;
-      case 'p':
-        outAction.pulse(n);
-        if (s.charAt(1) == ':') {
-          s.remove(0, 2);
-          int d = nextNumber(s);
-          if (d < 1 | d > 5000) {
-            Serial.println(F("Bad pulse"));
-            return;
-          }
-          d = d / 50;
-          if (d == 0) {
-            d++;
-          }
-          outAction.setDelay(d);
+  const char c = *inputPos;
+  switch (c) {
+    case 0:
+    case '+': case '1': case 's': case 'u':
+      outAction.turnOn(n);
+      break;
+    case '-': case '0': case 'r': case 'd':DEF:
+      outAction.turnOff(n);
+      break;
+    case '*': case 't': 
+      outAction.toggle(n);
+      break;
+    case 'p':
+      outAction.pulse(n);
+      inputPos++;
+      if (*inputPos == ':') {
+        inputPos++;
+        int d = nextNumber();
+        if (d < 1 | d > 5000) {
+          Serial.println(F("Bad pulse"));
+          return;
         }
-        break;
-      case 'f': {
-          s.remove(0, 2);
-          int fi = nextNumber(s);
-          boolean inv = false;
-          if (fi < 1 || fi >= MAX_FLASH) {
-            Serial.println(F("Bad index"));
-            return;
-          }
-          if (s.length() > 0 && s.charAt(0) == 'i') {
-            inv = true;
-          }
-          fi--;
-          outAction.flash(n, fi, inv);
+        d = d / MILLIS_SCALE_FACTOR;
+        if (d == 0) {
+          d++;
         }
-        break;
-      default:
-        Serial.println(F("Bad fn"));
-        return;
-    }
+        outAction.setDelay(d);
+      }
+      break;
+    case 'f': {
+        inputPos++;
+        int fi = -1;
+        if (*inputPos == ':') {
+          inputPos++;
+          fi = nextNumber();
+        }
+        boolean inv = false;
+        if (fi < 1 || fi >= MAX_FLASH) {
+          Serial.println(F("Bad flash"));
+          return;
+        }
+        if (*inputPos == 'i') {
+          inv = true;
+        }
+        fi--;
+        outAction.flash(n, fi, inv);
+      }
+      break;
+    default:
+      Serial.println(F("Bad fn"));
+      return;
   }
   prepareCommand();
   addCommandPart(action);
@@ -223,7 +242,7 @@ void outputStatus() {
 
   for (int i = 0; i < MAX_OUTPUT; i++) {
     if (i % 32 == 0) {
-      Serial.print("\t");
+      Serial.print('\t');
     }
     if (i > 0) {
       if (i % 8 == 0) {
@@ -245,7 +264,10 @@ void FlashProcessor::clearOutput(byte index) {
     boolean clr = false;
     boolean next = ptr->nextInvert;
     byte i = ptr->outputIndex;
-    if (i == index || (next && ((i + 1) == index))) {
+    if (debugFlash) {
+      Serial.print("CLO:"); Serial.print(index); Serial.print('='); Serial.print(i); Serial.print(','); Serial.println(next);
+    }
+    if ((i == index) || (next && ((i + 1) == index))) {
       output.clear(i);
       if (next) {
         byte x = (i == index) ? i + 1 : i;
@@ -275,22 +297,23 @@ Processor::R FlashProcessor::processAction2(ExecutionState& state) {
     clearOutput(oi);
     return Processor::ignored;
   }
-  Serial.println("have flash");
+  if (debugFlash) {
+    Serial.println(F("have flash"));
+  }
   if (pendingCount >= MAX_PENDING_FLASHES) {
-    Serial.println("Overflow");
+    Serial.println(F("Overflow"));
     return Processor::ignored;
   }
   if (state.invert) {
     // just disable:
     clearOutput(oi);
     Output::setOutputActive(oi, false);
-    Serial.println("Inverted");
+    Serial.println(F("Inverted"));
     return Processor::finished;
   }
   byte f = data.pulseDelay();
-  Serial.println(f);
   if (f >= MAX_FLASH) {
-    Serial.println("Bad Flash");
+    Serial.println(F("Bad Flash"));
     return Processor::finished;
   }
   const FlashConfig fc = flashConfig[f];
@@ -299,7 +322,7 @@ Processor::R FlashProcessor::processAction2(ExecutionState& state) {
   byte stIndex;
   byte d = fc.onDelay;
   if (d == 0) {
-    Serial.println("0 delay");
+    Serial.println(F("0 delay"));
     return Processor::finished;
   }
   if (c > 0 && state.wait) {
@@ -309,7 +332,7 @@ Processor::R FlashProcessor::processAction2(ExecutionState& state) {
   }
 
   if (debugFlash) {
-    Serial.print("ExeFlash:"); Serial.print(oi + 1); Serial.print(':'); Serial.print(f + 1); 
+    Serial.print(F("ExeFlash:")); Serial.print(oi + 1); Serial.print(':'); Serial.print(f + 1); 
     if (data.nextInvert) {
       Serial.print('I');
     }
@@ -330,8 +353,9 @@ Processor::R FlashProcessor::processAction2(ExecutionState& state) {
   for (PendingFlash* ptr = pendingFlashes; ptr < pendingFlashes + MAX_PENDING_FLASHES; ptr++) {
     if (!ptr->active) {
       *ptr = cfg;
+      pendingCount++;
       if (debugFlash) {
-        Serial.println("ExecFlash@"); Serial.println((int)ptr, HEX);
+        Serial.println(F("ExecFlash@")); Serial.println((int)ptr, HEX);
       }
       output.set(oi);
       if (cfg.nextInvert) {
@@ -342,6 +366,9 @@ Processor::R FlashProcessor::processAction2(ExecutionState& state) {
 
       return stIndex == 0 ? Processor::finished : Processor::blocked;
     }
+  }
+  if (debugFlash) {
+    Serial.println("Overflow");
   }
   return Processor::ignored;
 }
@@ -362,7 +389,13 @@ void FlashProcessor::clear(PendingFlash* ptr) {
     Executor::finishAction2(*st);
   }
   ptr->clear();
-  pendingCount--;
+  byte c = 0;
+  for (PendingFlash* ptr = pendingFlashes; ptr < pendingFlashes + MAX_PENDING_FLASHES; ptr++) {
+    if (ptr->active) {
+      c++;
+    }
+  }
+  pendingCount = c;
 }
 
 void FlashProcessor::clear() {
@@ -388,18 +421,8 @@ void FlashProcessor::timeout(unsigned int data) {
   PendingFlash* ptr = (PendingFlash*)data;
   PendingFlash& f = *ptr;
   if (debugFlash) {
-    Serial.print("Flash@"); Serial.print(data, HEX);
+    Serial.print(F("Flash@")); Serial.print(data, HEX);
   }
-  if (f.counter > 0) {
-    if (--f.counter == 0) {
-      if (debugFlash) {
-        Serial.print(" End");
-      }
-      clear(ptr);
-      return;
-    }
-  }
-  
   byte fi = ptr->flashIdx;
   if (fi >= MAX_FLASH) {
     clear(ptr);
@@ -408,6 +431,16 @@ void FlashProcessor::timeout(unsigned int data) {
   const FlashConfig& c = flashConfig[fi];
   byte oi = ptr->outputIndex;
   boolean ns = output.isSet(oi);
+
+  if (!ns && f.counter > 0) {
+    if (--f.counter == 0) {
+      if (debugFlash) {
+        Serial.print(F(" End"));
+      }
+      clear(ptr);
+      return;
+    }
+  }
   output.setBit(oi, !ns);
   if (ptr->nextInvert) {
     output.setBit(oi + 1, ns);
@@ -475,19 +508,20 @@ void FlashConfig::print(String& s, int index) {
   s.concat(flashCount);
 }
 
-void flashCommand(String& s) {
-  int fl = nextNumber(s);
+void flashCommand() {
+  int fl = nextNumber();
   if (fl < 1 || fl > MAX_FLASH) {
     Serial.println(F("Bad index"));
+    return;
   }
-  int onD = nextNumber(s);
-  int offD = nextNumber(s);
-  if (onD == 0 || offD == 0 || onD >= 200 || offD > 200) {
+  int onD = nextNumber();
+  int offD = nextNumber();
+  if (onD < 1 || offD < 1 || onD >= 200 || offD > 200) {
     Serial.println(F("Bad delay"));
     return;
   }
-  int cnt = nextNumber(s);
-  if (cnt > 200) {
+  int cnt = nextNumber();
+  if (cnt < 0 || cnt > 200) {
     Serial.println(F("Bad count"));
     return;
   }
@@ -497,7 +531,7 @@ void flashCommand(String& s) {
   cfg.flashCount = cnt;
 
   String x;
-  cfg.print(x, &cfg - flashConfig);
+  cfg.print(x, (&cfg - flashConfig) + 1);
   Serial.println(x);
 }
 
