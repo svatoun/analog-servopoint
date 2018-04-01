@@ -177,9 +177,9 @@ void Executor::schedule(const ActionRef& ref, int id, boolean invert) {
 void Executor::schedule(const ActionRef& ref, int id, boolean invert, boolean wait) {
   if (debugExecutor) {
     Serial.print(F("ExAction: ")); 
-    String s;
-    ref.print(s);-
-    Serial.print(F("Ref: ")); Serial.println(s);
+    initPrintBuffer();
+    ref.print(printBuffer);
+    Serial.print(F("Ref: ")); Serial.println(printBuffer);
   }  
   for (ExecutionState* st = queue; st < (queue + QUEUE_SIZE); st++) {
     ExecutionState& q = *st;
@@ -216,9 +216,9 @@ void Executor::printQ(const ExecutionState& q) {
   Serial.print(F(" A:")); Serial.print((int)&a, HEX); Serial.print(F(" / ")); 
       Serial.print(q.action.i(), HEX); Serial.print(F(", C:")); Serial.print(a.command);
   Serial.print('-');
-  String s;
-  a.print(s);
-  Serial.println(s);
+  initPrintBuffer();
+  a.print(printBuffer);
+  Serial.println(printBuffer);
 }
 
 void Executor::finishAction2(ExecutionState& q) {
@@ -265,6 +265,7 @@ void Executor::process() {
       q.action.next();
       continue;
     }
+    boolean known = false;
     if (q.processor != NULL) {
       Processor::R result = q.processor->pending(q.action.a(), &q.data);
       if (result == Processor::finished) {
@@ -295,29 +296,41 @@ void Executor::process() {
       Processor::R res;
 
       res = proc->processAction2(q);
-      if (res == Processor::ignored) {
-          res = proc->processAction(a, i);
+      if (debugExecutor) {
+        Serial.print(F("EXE:")); Serial.println(res);
       }
       if (res == Processor::ignored) {
         continue;
       }
-      if (debugExecutor) {
-        Serial.print(F("EXE:")); Serial.println(res);
-      }
+      known = true;
       if (!q.action.isEmpty()) {
         switch (res) {
           case Processor::blocked:
             block(q, proc);
-            Serial.print(F("BL:")); printQ(q); // Serial.print(q.action.i(), HEX); Serial.print(F(", command = ")); Serial.println(a.command);
+            if (debugExecutor) {
+              Serial.print(F("BL:")); 
+              printQ(q); 
+            }
             break;
           case Processor::finished:
             // the 'wait' flag is not reset.
             unblock(q);
             q.action.next();
             break;
+          case Processor::full:
+            known = true;
+            continue;
         }
       }
       break;
+    }
+    if (!known) {
+      Serial.println(F("Discard: ")); 
+      initPrintBuffer();
+      q.action.a().print(printBuffer);
+      Serial.println(printBuffer);
+      unblock(q);
+      q.action.next();
     }
   }
 }

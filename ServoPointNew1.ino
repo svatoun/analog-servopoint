@@ -22,6 +22,7 @@ byte state[(maxId + 7) / 8];
 
 Command commands[MAX_COMMANDS];
 
+char printBuffer[80];
 
 /**
    Serves to build up a new command during setup. Takes priority over any actions
@@ -417,7 +418,7 @@ void replaceCommand(Command& c, const Command& def) {
   defineNewCommand(def, c);
 }
 
-ModuleChain::ModuleChain(const String& name, byte aPrirority,  void (*h)(ModuleCmd)) : next(NULL), priority(aPrirority) {
+ModuleChain::ModuleChain(const char* name, byte aPrirority,  void (*h)(ModuleCmd)) : next(NULL), priority(aPrirority) {
   static ModuleChain* __last = NULL;
   if (__last == NULL) {
     head = NULL;

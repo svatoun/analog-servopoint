@@ -74,7 +74,7 @@ void resetTerminal() {
 }
 
 
-void registerLineCommand(const char* aCmd, void (*aHandler)(String& )) {
+void registerLineCommand(const char* aCmd, void (*aHandler)()) {
   for (int i = 0; i < maxLineCommands; i++) {
     if (lineCommands[i].handler == NULL) {
       lineCommands[i].cmd = aCmd;
@@ -168,10 +168,6 @@ void processTerminal() {
     inputPos++;
     *inputPos = 0;
   }
-}
-
-int nextNumber(String& input) {
-  return nextNumber();
 }
 
 int nextNumber() {
@@ -332,9 +328,9 @@ void commandDefine() {
   definedCommand = c;
   definedCommand.id = no;
 
-  String e;
-  definedCommand.print(e);
-  Serial.println(e);
+  initPrintBuffer();
+  definedCommand.print(printBuffer);
+  Serial.println(printBuffer);
   commandDef = 0;
   if (interactive) {
     Serial.println(); Serial.print(commandDef + 1); Serial.println(F(":>"));
@@ -345,12 +341,17 @@ void commandFinish() {
   if (commandDef < 0) {
     Serial.print(F("Empty command"));
     resetTerminal();
+    return;
   }
 
   int idx = defineCommand(definedCommand, commandNo);
   if (interactive) {
-    Serial.print(F("Defined command #")); Serial.println(idx);
-    Serial.print(F("Free RAM: ")); Serial.println(freeRam());
+    if (idx < 0) {
+      Serial.println(F("Error"));
+    } else {
+      Serial.print(F("Defined command #")); Serial.println(idx);
+      Serial.print(F("Free RAM: ")); Serial.println(freeRam());
+    }
   }
   commandEepromSave();
   resetTerminal();
@@ -406,26 +407,28 @@ void commandExecute() {
 
 void commandDumpEEProm() {
   Serial.println(F("EEPROM Dump:"));
-  String line;
-  line.reserve(8 * 3 + 4);
+  char buffer[24 + 4 + 1];
   int cnt = 0;
+  char *ptr = buffer;
+  *ptr = 0;
   for (int eea = 0; eea < eeaddr_top; eea++) {
     int r = EEPROM.read(eea);
     if (r < 0x10) {
-      line.concat('0');
+      *(ptr++) = '0';
     }
-    line.concat(String(r, HEX)); line.concat(' ');
+    ptr = printNumber(ptr, r, 16);
+    append(ptr, ' ');
     cnt++;
     if (cnt %32 == 0) {
-      Serial.println(line);
-      line = "";
+      Serial.println(buffer);
+      *(ptr = buffer) = 0;
     } else if (cnt % 8 == 0) {
-      Serial.print(line);
-      line = "";
+      Serial.print(buffer);
       Serial.print(F("- "));
+      *(ptr = buffer) = 0;
     }
   }
-  Serial.println(line);
+  Serial.println(buffer);
 }
 
 enum PlayMode {

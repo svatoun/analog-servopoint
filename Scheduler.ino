@@ -1,8 +1,8 @@
-static ScheduledItem Scheduler2::work[MAX_SCHEDULED_ITEMS];
 Scheduler2 scheduler;
 
 long baseMillis = 0;
 
+static ScheduledItem Scheduler2::work[MAX_SCHEDULED_ITEMS];
 byte Scheduler2::scheduledBottom = 0;
 byte Scheduler2::scheduledCount = 0;
 
@@ -15,8 +15,9 @@ void Scheduler2::boot() {
   Action::registerDumper(Instr::wait, &printWaitTime);
 }
 
-void printWaitTime(const Action& a, String& s) {
-  a.asWaitAction().print(s);
+void printWaitTime(const Action& a, char* out) {
+  const WaitActionData& wa = a.asWaitAction();
+  wa.print(out);
 }
 
 /*
@@ -33,14 +34,15 @@ void printWaitTime(const Action& a, String& s) {
     timerError
   };
   */
-void WaitActionData::print(String& s) {
+void WaitActionData::print(char* out) {
   switch (waitType) {
     case wait:
-      s += F("WAT:");
-      s += waitTime;
+      strcat_P(out, PSTR("WAT:"));
+      out += strlen(out);
+      printNumber(out, waitTime, 10);
       break;
     default:
-      s += F("WAT:err");
+      strcpy_P(out, PSTR("WAT:err"));
       break;
   }
 }
@@ -237,10 +239,6 @@ Processor::R Scheduler2::processAction2(ExecutionState& s) {
       return Processor::R::blocked;
       break;
   }
-}
-
-Processor::R Scheduler2::processAction(const Action& a, int handle) {
-  return Processor::R::ignored;
 }
 
 void waitCommand() {

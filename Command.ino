@@ -65,15 +65,15 @@ void dumpCommands() {
     if (c.available()) {
       continue;
     }
-    String s;
-    c.print(s);
-    Serial.println(s);
+    initPrintBuffer();
+    c.print(printBuffer);
+    Serial.println(printBuffer);
     int actionIndex = c.actionIndex;
     ActionRef ref = Action::getRef(actionIndex);
     while (!ref.isEmpty()) {
-      s = "";
-      ref.a().print(s);
-      Serial.println(s);
+      initPrintBuffer();
+      ref.a().print(printBuffer);
+      Serial.println(printBuffer);
       ref.next();
     }
     Serial.println("FIN");
@@ -154,10 +154,10 @@ bool Command::processAll(int input, boolean state) {
     found = true;
     if (debugInput) {
       Serial.print(F("Found command:" ));  Serial.print((int)c, HEX);
-      Serial.print(" ");
-      String s;
-      c->print(s);
-      Serial.println(s);
+      Serial.print(' ');
+      initPrintBuffer();
+      c->print(printBuffer);
+      Serial.println(printBuffer);
     }
     c->execute(state);
     last = c;
@@ -210,10 +210,10 @@ const Command* Command::find(int input, boolean state, const Command* from) {
         }
         if (ok) {
             if (debugInput) {
-              String s;
+              printBuffer[0] = 0;
               Serial.print(F("Found: "));
-              c.print(s);
-              Serial.println(s);
+              c.print(printBuffer);
+              Serial.println(printBuffer);
             }
             return &c;
         }
@@ -225,16 +225,18 @@ const Command* Command::find(int input, boolean state, const Command* from) {
 
 char triggerChars[] = { 'C', 'O', 'T', 'A', 'B', 'R', 'E', 'E' };
 
-void Command::print(String& s) {
-  s += F("DEF:");
-  s += (id + 1);
-  s += F(":");
-  s += (input + 1);
-  s += F(":");
+void Command::print(char* out) {
   char t = triggerChars[trigger];
-  s += t;
+  strcpy_P(out, PSTR("DEF:"));
+  out += strlen(out);
+  out = printNumber(out, id + 1, 10);
+  append(out, ':');
+  out = printNumber(out, input + 1, 10);
+  append(out, ':');
+  append(out, t);
+  *(out) = 0;
   if (!wait) {
-    s += F(":N");
+    strcat_P(out, PSTR(":N"));
   }
 }
 

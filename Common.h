@@ -13,6 +13,7 @@ bool setupActive = false;
 char pressedKey;
 
 extern byte state[];
+extern char printBuffer[];
 
 bool isKeyPressed(int k) {
   byte o = k >> 3;
@@ -20,6 +21,22 @@ bool isKeyPressed(int k) {
 }
 
 bool setKeyPressed(int k, boolean s);
+
+ __attribute__((always_inline)) char* append(char* &ptr, char c) {
+  *(ptr++) = c;
+  return ptr;
+}
+
+__attribute__((noinline)) char* initPrintBuffer() {
+  printBuffer[0] = 0;
+  return printBuffer;
+}
+
+__attribute__((noinline)) char *printNumber(char *out, int no, int base) {
+  itoa(no, out, base);
+  return out + strlen(out);
+}
+
 
 enum Instr {
   none = 0,
@@ -164,24 +181,7 @@ struct ServoConfig {
     statusOutput = noOutput;
   }
 
-  void print(int id, String& s) {
-    s.concat(F("RNG:"));
-    s.concat(id);
-    s.concat(':');
-    s.concat(left());
-    s.concat(':');
-    s.concat(right());
-    s.concat(':');
-    s.concat(servoSpeed + 1);
-    int p = output();
-    if (p == -1) {
-      return;
-    }
-    s.concat("\nSFB:");
-    s.concat(id);
-    s.concat(':');
-    s.concat(p + 1);
-  }
+  void print(int id, char* out);
 
   // load data from EEPROM
   void load(int idx);
@@ -203,7 +203,7 @@ struct FlashConfig {
   void save(int index);
   void load(int index);
 
-  void print(String &s, int index);
+  void print(char* out, int index);
 };
 
 extern ServoConfig  setupServoConfig;
@@ -218,7 +218,8 @@ struct ControlActionData;
 /**
    Action defines the step which should be executed.
 */
-typedef void (*dumper_t)(const Action& , String&);
+extern char printBuffer[];
+typedef void (*dumper_t)(const Action& , char*);
 
 struct Action {
     byte  last    :   1;    // flag, last action
@@ -292,7 +293,7 @@ struct Action {
     void save(int idx);
     void load(int idx);
 
-    void print(String& s);
+    void print(char* out);
 };
 
 const Action noAction;
@@ -339,7 +340,7 @@ public:
   void makeLast() { 
     current.makeLast(); 
   }
-  void print(String &s);
+  void print(char* out);
 };
 
 struct ServoActionData {
@@ -396,16 +397,7 @@ struct ServoActionData {
     targetPos = (degs / 3) + servoCustomStart;
   }
 
-  void print(String& out) {
-    out.concat(F("MOV:")); 
-    if (isPredefinedPosition()) {
-      out.concat(servoIndex + 1); out.concat(':');
-      out.concat(isLeft() ? 'L' : 'R');
-    } else {
-      out.concat(servoIndex + 1); out.concat(':');
-      out.concat(targetPosition());
-    }
-  }
+  void print(char* out);
 };
 // sanity check
 static_assert (sizeof(ServoActionData) <= sizeof(Action), "ServoActionData misaligned");
@@ -477,21 +469,7 @@ struct OutputActionData {
       return outputIndex;
     }
 
-    void print(String& s) {
-      s.concat(F("OUT:")); s.concat(outputIndex); s.concat(':');
-      switch (fn) {
-        case outOn: s.concat('H'); break;
-        case outOff: s.concat('L'); break;
-        case outToggle: s.concat('T'); break;
-        case outFlash: 
-          s.concat('F'); s.concat(pulseLen); 
-          if (nextInvert) {
-            s.concat(":I");
-          }
-          break;
-        default: s.concat('E'); break;
-      }
-    }
+    void print(char* out);
 };
 static_assert (OutputActionData::outError <= 7, "Too many output functions");
 static_assert (sizeof(OutputActionData) <= sizeof(Action), "Output data too large");
@@ -534,7 +512,7 @@ struct WaitActionData {
 
   int   computeDelay() { return waitTime * 50; }
 
-  void print(String& s);
+  void print(char* s);
 };
 
 static_assert (sizeof(WaitActionData) <= sizeof(Action), "Wait action data too long");
@@ -569,7 +547,7 @@ struct ControlActionData {
     condIndex = c;
   }
 
-  void print(String& s);
+  void print(char* s);
 };
 
 static_assert (sizeof(ControlActionData) <= sizeof(Action), "Control action too long");
@@ -581,12 +559,10 @@ class Processor {
     enum R {
       ignored,
       finished,
-      blocked
+      blocked,
+      full
     };
-    virtual R processAction2(ExecutionState& state) {
-      return ignored;
-    }
-    virtual R processAction(const Action& ac, int handle) = 0;
+    virtual R processAction2(ExecutionState& state) = 0;
     virtual void tick() {};
     virtual void clear() {}
     virtual boolean cancel(const ExecutionState& ac) = 0;
@@ -692,7 +668,6 @@ class Scheduler2 : public Processor, public ScheduledProcessor {
   static ScheduledItem work[];
   static byte scheduledBottom;
   static byte scheduledCount;
-  int v;
   static void printQ();
 public:
   Scheduler2() : Processor() {}
@@ -700,7 +675,6 @@ public:
   void schedulerTick();
   virtual void timeout(unsigned int data) override;
   virtual R processAction2(ExecutionState& state) override;
-  virtual R processAction(const Action& ac, int handle) override;
   virtual bool cancel(const ExecutionState& ac) override;
   static bool schedule(unsigned int timeout, ScheduledProcessor* callback, unsigned int data);
   static void cancel(ScheduledProcessor* callback, unsigned int data);
@@ -751,7 +725,6 @@ class ServoProcessor : public Processor {
     void clear();                     // stop working
     static void clearAll();
     R processAction2(ExecutionState& state) override;
-    R processAction(const Action& ac, int handle) override;
     boolean cancel(const ExecutionState& ac) override;
 
     boolean available() {
@@ -864,7 +837,7 @@ struct Command {
 
     static int findFree();
 
-    void print(String& s);
+    void print(char* out);
 
 };
 
@@ -888,7 +861,7 @@ struct LineCommand {
   LineCommand() : cmd(NULL), handler(NULL) {}
 };
 
-void registerLineCommand(const char* cmd, void (*aHandler)(String& ));
+void registerLineCommand(const char* cmd, void (*aHandler)());
 
 
 enum ModuleCmd {
@@ -908,7 +881,7 @@ struct ModuleChain {
   ModuleChain *next;
   void (*handler)(ModuleCmd);
 
-  ModuleChain(const String& n, byte priority, void (*h)(ModuleCmd));
+  ModuleChain(const char* n, byte priority, void (*h)(ModuleCmd));
 
   static void invokeAll(ModuleCmd cmd);
 };

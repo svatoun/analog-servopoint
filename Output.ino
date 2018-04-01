@@ -22,9 +22,6 @@ class OutputProcessor : public Processor, public ScheduledProcessor {
     OuputProcessor() {
     }
     R processAction2(ExecutionState&) override;
-    R processAction(const Action& ac, int handle) {
-      return Processor::ignored;
-    }
     void timeout(unsigned int data) override;
     void tick() override;
     void clear() override;
@@ -41,9 +38,6 @@ class FlashProcessor : public Processor, public ScheduledProcessor {
     FlashProcessor() {
     }
     R processAction2(ExecutionState&) override;
-    R processAction(const Action& ac, int handle) {
-      return Processor::ignored;
-    }
     void timeout(unsigned int data) override;
     void tick() override;
     void clear() override;
@@ -136,13 +130,6 @@ Processor::R OutputProcessor::processAction2(ExecutionState& state) {
 
 static_assert (MAX_OUTPUT <= (OUTPUT_MASK + 1), "Maximum outputs too high");
 
-void printHexByte(String& buffer, int val) {
-  if (val < 0x10) {
-    buffer.concat('0');
-  }
-  buffer.concat(String(val, HEX));
-}
-
 void outputInit() {
   // flash must be BEFORE the output
   executor.addProcessor(&flashProcessor);
@@ -154,22 +141,31 @@ void outputInit() {
 
 char fnCodes[] = { '1', '0', 'T', 'P', 'F', 'E', 'E', 'E' };
 
-void printOutputAction(const Action& ac) {
-  const OutputActionData& data = ac.asOutputAction();
-  byte fn = data.fn;
-  Serial.print(F("OUT:")); Serial.print(data.outputIndex + 1);
-  Serial.print(':'); Serial.print(fnCodes[fn]);
-  if (fn >= OutputActionData::outPulse) {
-    byte d = data.pulseDelay();
-    if (fn == OutputActionData::outPulse) {
+void OutputActionData::print(char* out) {
+  byte _fn = fn;
+  strcat_P(out, PSTR("OUT:"));
+  out += strlen(out);
+  out = printNumber(out, outputIndex + 1, 10);
+  append(out, ':');
+  append(out, fnCodes[_fn]);
+  *out = 0;
+  if (_fn >= OutputActionData::outPulse) {
+    byte d = pulseDelay();
+    if (_fn == OutputActionData::outPulse) {
       if (d == 0) {
         return;
       }
     } else {
       d++;
     }
-    Serial.print(':'); Serial.print(d);
+    append(out, ':');
+    out = printNumber(out, d, 10);
   }
+}
+
+void printOutputAction(const Action& ac, char* out) {
+  const OutputActionData& data = ac.asOutputAction();
+  data.print(out);
 }
 
 void outputCommand() {
@@ -337,9 +333,9 @@ Processor::R FlashProcessor::processAction2(ExecutionState& state) {
       Serial.print('I');
     }
     Serial.println();
-    String s;
-    fc.print(s, f + 1);
-    Serial.println(s);
+    initPrintBuffer();
+    fc.print(printBuffer, f + 1);
+    Serial.println(printBuffer);
   }
 
   PendingFlash cfg;
@@ -483,13 +479,12 @@ void clearFlashConfig() {
 }
 
 void dumpFlashConfig() {
-  String s;
   byte index = 1;
   for(FlashConfig* p = flashConfig; p < (flashConfig  + MAX_FLASH); p++, index++) {
     if (!p->empty()) {
-      s = "";
-      p->print(s, index);
-      Serial.println(s);
+      printBuffer[0] = 0;
+      p->print(printBuffer, index);
+      Serial.println(printBuffer);
     }
   }
 }
@@ -502,10 +497,16 @@ void FlashConfig::load(int idx) {
   EEPROM.get(eeaddr_flashTable + idx * sizeof(FlashConfig), *this);
 }
 
-void FlashConfig::print(String& s, int index) {
-  s += F("FLS:"); s.concat(index); s.concat(':');
-  s.concat(onDelay); s.concat(':'); s.concat(offDelay); s.concat(':');
-  s.concat(flashCount);
+void FlashConfig::print(char *out, int index) {
+  strcat_P(out, PSTR("FLS:"));
+  out += strlen(out);
+  out = printNumber(out, index, 10);
+  append(out, ':');
+  out = printNumber(out, onDelay, 10);
+  append(out, ':');
+  out = printNumber(out, offDelay, 10);
+  append(out, ':');
+  out = printNumber(out, flashCount, 10);
 }
 
 void flashCommand() {
@@ -530,9 +531,9 @@ void flashCommand() {
   cfg.offDelay = offD;
   cfg.flashCount = cnt;
 
-  String x;
-  cfg.print(x, (&cfg - flashConfig) + 1);
-  Serial.println(x);
+  initPrintBuffer();
+  cfg.print(printBuffer, (&cfg - flashConfig) + 1);
+  Serial.println(printBuffer);
 }
 
 void outputModuleHandler(ModuleCmd cmd) {

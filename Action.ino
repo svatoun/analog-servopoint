@@ -1,5 +1,4 @@
 
-
 // Action  Action::actionTable[MAX_ACTIONS];
 ActionRenumberFunc Action::renumberCallbacks[5];
 dumper_t Action::dumpers[] = { NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL };
@@ -16,12 +15,15 @@ void Action::registerDumper(Instr cmd, dumper_t dumper) {
   dumpers[cmd] = dumper;
 }
 
-void Action::print(String& s) {
+void Action::print(char* out) {
   dumper_t d = dumpers[command];
   if (d == NULL) {
-    s.concat(F("UNK:")); s.concat(command); s.concat(F(":")); s.concat(String(data, HEX));
+    strcat_P(out, PSTR("UNK:"));
+    out += strlen(out);
+    out = printNumber(out, command, 10);
+    out = printNumber(append(out, ':'), data, 16);
   } else {
-    d(*this, s);
+    d(*this, out);
   }
 }
 
@@ -262,10 +264,15 @@ void ActionRef::saveTo(int pos) {
   ptr = NULL;
 }
 
-void ActionRef::print(String& s) {
-  s += F("i:"); s.concat(index);
-  s.concat(F(" ptr:")); s.concat(String((int)ptr, HEX));
-  s.concat(' '); a().print(s);
+void ActionRef::print(char* out) {
+  strcat_P(out, PSTR("i:"));
+  out += strlen(out);
+  out = printNumber(out, index, 10);
+  strcat_P(out, PSTR("ptr:"));
+  out += strlen(out);
+  out = printNumber(out, (int)ptr, 16);
+  append(out, ' ');
+  a().print(out);
 }
 
 void Action::load(int index) {
