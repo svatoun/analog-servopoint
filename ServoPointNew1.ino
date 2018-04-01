@@ -417,7 +417,7 @@ void replaceCommand(Command& c, const Command& def) {
   defineNewCommand(def, c);
 }
 
-ModuleChain::ModuleChain(const String& name, byte aPrirority,  void (*h)(ModuleCmd)) : next(NULL), priority(aPrirority) {
+ModuleChain::ModuleChain(const char* name, byte aPrirority,  void (*h)(ModuleCmd)) : next(NULL), priority(aPrirority) {
   static ModuleChain* __last = NULL;
   if (__last == NULL) {
     head = NULL;

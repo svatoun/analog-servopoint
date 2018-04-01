@@ -177,9 +177,9 @@ void Executor::schedule(const ActionRef& ref, int id, boolean invert) {
 void Executor::schedule(const ActionRef& ref, int id, boolean invert, boolean wait) {
   if (debugExecutor) {
     Serial.print(F("ExAction: ")); 
-    String s;
-    ref.print(s);-
-    Serial.print(F("Ref: ")); Serial.println(s);
+    printBuffer[0] = 0;
+    ref.print(printBuffer);
+    Serial.print(F("Ref: ")); Serial.println(printBuffer);
   }  
   for (ExecutionState* st = queue; st < (queue + QUEUE_SIZE); st++) {
     ExecutionState& q = *st;
@@ -216,9 +216,9 @@ void Executor::printQ(const ExecutionState& q) {
   Serial.print(F(" A:")); Serial.print((int)&a, HEX); Serial.print(F(" / ")); 
       Serial.print(q.action.i(), HEX); Serial.print(F(", C:")); Serial.print(a.command);
   Serial.print('-');
-  String s;
-  a.print(s);
-  Serial.println(s);
+  printBuffer[0] = 0;
+  a.print(printBuffer);
+  Serial.println(printBuffer);
 }
 
 void Executor::finishAction2(ExecutionState& q) {
@@ -323,9 +323,9 @@ void Executor::process() {
     }
     if (!known) {
       Serial.println(F("Discard: ")); 
-      String s;
-      q.action.a().print(s);
-      Serial.println(s);
+      printBuffer[0] = 0;
+      q.action.a().print(printBuffer);
+      Serial.println(printBuffer);
       unblock(q);
       q.action.next();
     }

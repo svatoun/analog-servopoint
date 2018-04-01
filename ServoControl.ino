@@ -20,6 +20,15 @@ ModuleChain servoModule("Servo", 0, &servoModuleHandler);
 byte  servoPositions[MAX_SERVO]; 
 boolean enable = false;
 
+void ServoConfig::print(int id, char* out) {
+  sprintf(out, "RNG:%d:%d:%d:%d", id, left(), right(), servoSpeed + 1);
+  int p = output();
+  if (p == -1) {
+    return;
+  }
+  out += strlen(out);
+  sprintf(out, "\nSFB:%d:%d", id, p + 1);
+}
 
 void servoSetup() {
   pinMode(servoSelectA, OUTPUT);
@@ -65,21 +74,25 @@ void servoSetup() {
   Action::registerDumper(servo, printServoAction);
 }
 
-void printServoAction(const Action& a, String& s) {
-  a.asServoAction().print(s);
+void printServoAction(const Action& a, char* out) {
+  const ServoActionData& sa = a.asServoAction();
+  if (sa.isPredefinedPosition()) {
+    sprintf(out, "MOV:%d:%c", sa.servoIndex + 1, sa.isLeft() ? 'L' : 'R');
+  } else {
+    sprintf(out, "MOV:%d:%d", sa.servoIndex + 1, sa.targetPosition());
+  }
 }
 
 void servoDump() {
-  String s;
   ServoConfig tmp;
   for (int i = 0; i < MAX_SERVO; i++) {
     tmp.load(i);
     if (tmp.isEmpty()) {
       continue;
     }
-    s = "";
-    tmp.print(i + 1, s);
-    Serial.println(s);
+    printBuffer[0] = 0;
+    tmp.print(i + 1, printBuffer);
+    Serial.println(printBuffer);
   }
 }
 

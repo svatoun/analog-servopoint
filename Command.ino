@@ -65,15 +65,15 @@ void dumpCommands() {
     if (c.available()) {
       continue;
     }
-    String s;
-    c.print(s);
-    Serial.println(s);
+    printBuffer[0] = 0;
+    c.print(printBuffer);
+    Serial.println(printBuffer);
     int actionIndex = c.actionIndex;
     ActionRef ref = Action::getRef(actionIndex);
     while (!ref.isEmpty()) {
-      s = "";
-      ref.a().print(s);
-      Serial.println(s);
+      printBuffer[0] = 0;
+      ref.a().print(printBuffer);
+      Serial.println(printBuffer);
       ref.next();
     }
     Serial.println("FIN");
@@ -155,9 +155,9 @@ bool Command::processAll(int input, boolean state) {
     if (debugInput) {
       Serial.print(F("Found command:" ));  Serial.print((int)c, HEX);
       Serial.print(" ");
-      String s;
-      c->print(s);
-      Serial.println(s);
+      printBuffer[0] = 0;
+      c->print(printBuffer);
+      Serial.println(printBuffer);
     }
     c->execute(state);
     last = c;
@@ -210,10 +210,10 @@ const Command* Command::find(int input, boolean state, const Command* from) {
         }
         if (ok) {
             if (debugInput) {
-              String s;
+              printBuffer[0] = 0;
               Serial.print(F("Found: "));
-              c.print(s);
-              Serial.println(s);
+              c.print(printBuffer);
+              Serial.println(printBuffer);
             }
             return &c;
         }
@@ -225,16 +225,11 @@ const Command* Command::find(int input, boolean state, const Command* from) {
 
 char triggerChars[] = { 'C', 'O', 'T', 'A', 'B', 'R', 'E', 'E' };
 
-void Command::print(String& s) {
-  s += F("DEF:");
-  s += (id + 1);
-  s += F(":");
-  s += (input + 1);
-  s += F(":");
+void Command::print(char* out) {
   char t = triggerChars[trigger];
-  s += t;
+  sprintf(out, "DEF:%d:%d:%c", id + 1, input + 1, t);
   if (!wait) {
-    s += F(":N");
+    strcat(out, ":N");
   }
 }
 

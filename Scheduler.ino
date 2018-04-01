@@ -15,8 +15,9 @@ void Scheduler2::boot() {
   Action::registerDumper(Instr::wait, &printWaitTime);
 }
 
-void printWaitTime(const Action& a, String& s) {
-  a.asWaitAction().print(s);
+void printWaitTime(const Action& a, char* out) {
+  const WaitActionData& wa = a.asWaitAction();
+  wa.print(out);
 }
 
 /*
@@ -33,14 +34,13 @@ void printWaitTime(const Action& a, String& s) {
     timerError
   };
   */
-void WaitActionData::print(String& s) {
+void WaitActionData::print(char* out) {
   switch (waitType) {
     case wait:
-      s += F("WAT:");
-      s += waitTime;
+      sprintf(out, "WAT:%d", waitTime);
       break;
     default:
-      s += F("WAT:err");
+      strcpy_P(out, PSTR("WAT:err"));
       break;
   }
 }
