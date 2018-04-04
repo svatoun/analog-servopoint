@@ -39,7 +39,8 @@ Tlačítka se čtou po sloupcích, v případě přepinačů je nutné zařadit 
 4. Upgrade obslužného SW - pomocí Arduino IDE
 
 
-Podrobnosti viz Wiki
+Podrobnosti viz [Wiki](wiki/)
+
 
 
 
