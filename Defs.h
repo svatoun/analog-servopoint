@@ -71,16 +71,17 @@ const int MAX_FLASH = 4;
 const int MAX_SCHEDULED_ITEMS = 16;
 const int MAX_PENDING_FLASHES = 8;
 
+const int MAX_KEYS = (ROWS * COLS);
 const int OUTPUT_BIT_SIZE = (MAX_OUTPUT + 7) / 8;
+const int SERVO_BIT_SIZE = (MAX_SERVO + 7) / 8;
+const int COMMAND_BIT_SIZE = (MAX_COMMANDS + 7) / 8;
 
+const int defaultPulseDelay = 100;
 
 /**
  * Maximum number of processors. Each servo processor counts as 1 !
  */
 const int MAX_PROCESSORS = 20;
-
-const int servoBase = 0;
-const int outputBase = 8;
 
 #define MILLIS_SCALE_FACTOR 50
 
@@ -100,6 +101,7 @@ const int debugInput = 0;
 const int debugPower = 0;
 const int debugSchedule = 0;
 const int debugFlash = 0;
+const int debugConditions = 0;
 #else
 const int debugControl = 0;
 const int debugExecutor = 0;
@@ -112,12 +114,14 @@ const int debugInput = 0;
 const int debugPower = 0;
 const int debugSchedule = 0;
 const int debugFlash = 0;
+const int debugConditions = 0;
 #endif
 
 /**
  * Pins controlling the output
  */
 const int numberOfLatches   = 1;
+static_assert (numberOfLatches <= OUTPUT_BIT_SIZE, "Invalid number of latches");
 
 // FIXME: no translation necessary.
 char keys[ROWS][COLS]  = { { 1, 2, 3, 4, }, { 5, 6, 7, 8, }, { 9, 10, 11, 12, }, { 13, 14, 15, 16, }, };

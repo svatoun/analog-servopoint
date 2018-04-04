@@ -235,9 +235,12 @@ Processor::R Scheduler2::processAction2(ExecutionState& s) {
       s.wait = true; s.waitNext = false;
       return Processor::R::finished;  
     case WaitActionData::wait:
-      schedule(wad.waitTime, this, &s);
+      schedule(packedTimeToUnits(wad.waitTime), this, &s);
       return Processor::R::blocked;
       break;
+    default:
+      // does not handle the wait condition states
+      return Processor::R::ignored;
   }
 }
 
@@ -273,9 +276,4 @@ void waitCommand() {
   prepareCommand();
   addCommandPart(action);
 }
-
-void waitConditionCommand() {
-  
-}
-
 

@@ -18,11 +18,12 @@
 
 ModuleChain* ModuleChain::head;
 
-byte state[(maxId + 7) / 8];
+byte keyStateTriggered[(maxId + 7) / 8];
+byte keyState[(maxId + 7) / 8];
 
 Command commands[MAX_COMMANDS];
 
-char printBuffer[80];
+char printBuffer[50];
 
 /**
    Serves to build up a new command during setup. Takes priority over any actions
@@ -63,7 +64,7 @@ void clearNewCommand() {
   if (debugControl) {
     Serial.println(F("Clearing new command"));
   }
-  executor.clear();
+  executor.clear(true);
   for (Action* a = newCommand; a < (newCommand + newCommandPartMax); a++) {
     a->init();
   }
@@ -193,8 +194,9 @@ void setup() {
   ModuleChain::invokeAll(ModuleCmd::initialize);
   
   //  initializeTables();
-  for (int i = 0; i < sizeof(state); i++) {
-    state[i] = 0;
+  for (int i = 0; i < sizeof(keyState); i++) {
+    keyState[i] = 0;
+    keyStateTriggered[i] = 0;
   }
 
   // initial load of key / switch positions
@@ -276,13 +278,33 @@ boolean eeBlockRead(byte magic, int eeaddr, void* address, int size) {
   }
 }
 
-bool setKeyPressed(int k, bool val) {
-  byte o = k >> 3;
-  byte mask = 0xfe << (k & 0x07);
-  state[o] = (state[o] & mask);
-  if (val) {
-    state[o] |= (~mask);
+void primeKeyChange(byte k) {
+  if (k >= maxId) {
+    return;
   }
+  bitfieldWrite(keyStateTriggered, k, true); 
+}
+
+char getKeyChange(byte k) {
+  if (k >= maxId) {
+    return -1;
+  }
+  if (bitfieldRead(keyStateTriggered, k)) {
+    return -1;
+  }
+  return bitfieldRead(keyState, k) ? 1 : 0;
+}
+
+bool isKeyPressed(byte k) {
+  if (k >= maxId) {
+    return false;
+  }
+  return bitfieldRead(keyState, k);
+}
+
+bool setKeyPressed(int k, bool val) {
+  bitfieldWrite(keyState, k, val);
+  bitfieldWrite(keyStateTriggered, k, false);
 }
 
 void processKey(int k, boolean pressed) {

@@ -17,8 +17,44 @@ ServoProcessor  processors[2];
 
 ModuleChain servoModule("Servo", 0, &servoModuleHandler);
 
+byte servosActiveTrigger[SERVO_BIT_SIZE];
+byte servosActive[SERVO_BIT_SIZE];
 byte  servoPositions[MAX_SERVO]; 
 boolean enable = false;
+
+
+void primeServoActive(byte k) {
+  if (k >= SERVO_BIT_SIZE) {
+    return;
+  }
+  bitfieldWrite(servosActiveTrigger, k, true);
+}
+
+bool isServoActive(byte k) {
+  if (k >= SERVO_BIT_SIZE) {
+    return false;
+  }
+  return bitfieldRead(activeOutputs, k);
+}
+
+char getServoActive(byte k) {
+  if (k >= SERVO_BIT_SIZE) {
+    return - 1;
+  }
+  if (bitfieldRead(servosActiveTrigger, k)) {
+    return -1;
+  }
+  return bitfieldRead(activeOutputs, k) ? 1 : 0;
+}
+
+boolean setServoActive(byte k, boolean s) {
+  if (k >= SERVO_BIT_SIZE) {
+    return;
+  }
+  bitfieldWrite(servosActiveTrigger, k, false);
+  bitfieldWrite(activeOutputs, k, s);
+}
+
 
 void ServoConfig::print(int id, char* out) {
   strcat_P(out, PSTR("RNG:"));
@@ -83,6 +119,11 @@ void servoSetup() {
   registerLineCommand("SFB", &commandServoFeedback);
 
   Action::registerDumper(servo, printServoAction);
+
+  for (int i = 0; i < sizeof(SERVO_BIT_SIZE); i++) {
+    servosActive[i] = 0;
+    servosActiveTrigger[i] = 0;
+  }
 }
 
 void printServoAction(const Action& a, char* out) {
@@ -207,7 +248,7 @@ void initServoFeedback(int pos, const ServoConfig& cfg) {
   pos -= l;
   bool b = (pos > -3) && (pos < 3);
   output.setBit(out, b);
-  Output::setOutputActive(out, b);
+  setOutputActive(out, b);
 }
 
 void startServos1To8() {
@@ -353,9 +394,10 @@ void ServoProcessor::moveFinished() {
   if (setupServoIndex < 0) {
     servoEEWrite();
   }
+  setServoActive(servoOutput, false);
   if (servoOutput >= 0) {
     output.setBit(servoOutput, setOutputOn);
-    Output::setOutputActive(servoOutput, setOutputOn);
+    setOutputActive(servoOutput, setOutputOn);
   }
   if (blockedState != NULL) {
     executor.finishAction2(*blockedState);
@@ -387,9 +429,6 @@ Processor::R ServoProcessor::processAction2(ExecutionState& state) {
   if (action.command != servo) {
     return ignored;
   }
-  if (!available()) {
-    return ignored;
-  }
   ServoActionData data = action.asServoAction();
   
   int s = data.servoIndex;
@@ -401,8 +440,11 @@ Processor::R ServoProcessor::processAction2(ExecutionState& state) {
   }
   if (linked != NULL) {
     if (!linked->isCompatibleWith(s)) {
-      return ignored;
+      return full;
     }
+  }
+  if (!available()) {
+    return full;
   }
   int l, r, spd;
   
@@ -433,7 +475,7 @@ Processor::R ServoProcessor::processAction2(ExecutionState& state) {
     setOutputOn = true;
     if (servoOutput >= 0) {
       output.setBit(servoOutput, false);
-      Output::setOutputActive(servoOutput, false);
+      setOutputActive(servoOutput, false);
     }
     target = data.targetPosition();
   }
@@ -458,7 +500,7 @@ Processor::R ServoProcessor::processAction2(ExecutionState& state) {
   }
   enable = true;
   ctrl.write(curAngle);
-
+  setServoActive(s, true);
   if (state.wait) {
     blockedState = &state;
     return blocked;

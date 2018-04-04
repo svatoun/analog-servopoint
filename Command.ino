@@ -1,5 +1,46 @@
 ModuleChain commandModule("Command", 20, &commandModuleHandler);
 
+
+byte activeCommands[COMMAND_BIT_SIZE];
+byte activeCommandsTrigger[COMMAND_BIT_SIZE];
+
+
+void primeCommandActive(byte k) {
+  if (k >= COMMAND_BIT_SIZE) {
+    return;
+  }
+  bitfieldWrite(activeCommandsTrigger, k, true);
+}
+
+bool isCommandActive(byte k) {
+  if (k >= COMMAND_BIT_SIZE) {
+    return false;
+  }
+  return bitfieldRead(activeCommands, k);
+}
+
+char getCommandActive(byte k) {
+  if (k >= COMMAND_BIT_SIZE) {
+    return - 1;
+  }
+  if (bitfieldRead(activeCommandsTrigger, k)) {
+    return -1;
+  }
+  return bitfieldRead(activeCommands, k) ? 1 : 0;
+}
+
+boolean setCommandActive(byte k, boolean s) {
+  if (k >= COMMAND_BIT_SIZE) {
+    return;
+  }
+  if (debugInput) {
+    Serial.print(F("ActCommand: ")); Serial.print(k + 1); Serial.print('-'); Serial.println(s);
+  }
+  bitfieldWrite(activeCommandsTrigger, k, false);
+  bitfieldWrite(activeCommands, k, s);
+}
+
+
 void commandModuleHandler(ModuleCmd cmd) {
   switch (cmd) {
     case initialize:
@@ -39,15 +80,25 @@ void displayCommandStatus() {
       actionCount++;
     }
   }
+  Serial.println();
+  Serial.print(F("Actions: ")); Serial.println(actionCount);
+
   int cmdCount = 0;
   const Command* cp;
-  for (cp = commands; cp < (commands + MAX_COMMANDS); cp++) {
+  Serial.print(F("Executing:"));
+  byte id = 0;
+  for (cp = commands; cp < (commands + MAX_COMMANDS); cp++, id++) {
     if (!cp->available()) {
       cmdCount++;
+      if (executor.isRunning(id)) {
+        Serial.print(id + 1); Serial.print(' ');
+      }
     }
   }  
-  Serial.print(F("Action count: ")); Serial.println(actionCount);
-  Serial.print(F("Defined commands: ")); Serial.println(cmdCount);
+  Serial.print(F("Commands: ")); Serial.println(cmdCount);
+  Serial.print(F("Cmd act :")); printBitField(activeCommands, MAX_COMMANDS);
+  Serial.print(F("\nCmd prim:")); printBitField(activeCommandsTrigger, MAX_COMMANDS);
+  Serial.println();
 }
 
 void clearCommands() {
@@ -93,6 +144,10 @@ void initializeTables() {
   const Command* cp;
   for (cp = commands; cp < (commands + MAX_COMMANDS); cp++) {
     cp->init();
+  }
+  for (int i = 0; i < sizeof(COMMAND_BIT_SIZE); i++) {
+    activeCommands[i] = 0;
+    activeCommandsTrigger[i] = 0;
   }
 }  
 
@@ -223,7 +278,7 @@ const Command* Command::find(int input, boolean state, const Command* from) {
   return NULL;
 }
 
-char triggerChars[] = { 'C', 'O', 'T', 'A', 'B', 'R', 'E', 'E' };
+char triggerChars[] = { '1', '0', 'T', 'A', 'B', 'R', 'E', 'E' };
 
 void Command::print(char* out) {
   char t = triggerChars[trigger];
@@ -231,7 +286,7 @@ void Command::print(char* out) {
   out += strlen(out);
   out = printNumber(out, id + 1, 10);
   append(out, ':');
-  out = printNumber(out, input + 1, 10);
+  out = printNumber(out, (input == 0x3f ? 0 : input + 1), 10);
   append(out, ':');
   append(out, t);
   *(out) = 0;

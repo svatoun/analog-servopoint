@@ -50,6 +50,7 @@ FlashProcessor  flashProcessor;
 PendingFlash FlashProcessor::pendingFlashes[MAX_PENDING_FLASHES];
 byte FlashProcessor::pendingCount = 0;
 
+
 void OutputProcessor::tick() {
   
 }
@@ -107,7 +108,7 @@ Processor::R OutputProcessor::processAction2(ExecutionState& state) {
       if (!invert) {
         int d = data.pulseDelay();
         if (d == 0) {
-          d = 6;
+          d = defaultPulseDelay;
         }
         scheduler.schedule(d, this, &state);
         t = true;
@@ -120,7 +121,7 @@ Processor::R OutputProcessor::processAction2(ExecutionState& state) {
   }
 
   output.setBit(outN, newState);
-  Output::setOutputActive(outN, newState);
+  setOutputActive(outN, newState);
   if (t && state.wait) {
     return Processor::blocked;
   } else {
@@ -155,6 +156,7 @@ void OutputActionData::print(char* out) {
       if (d == 0) {
         return;
       }
+      d = d * MILLIS_SCALE_FACTOR;
     } else {
       d++;
     }
@@ -233,22 +235,39 @@ void outputCommand() {
   addCommandPart(action);
 }
 
-void outputStatus() {
-  Serial.println(F("State of outputs: "));
-
-  for (int i = 0; i < MAX_OUTPUT; i++) {
+void printBitField(byte* bits, int count) {
+  byte mask =0x01;
+  byte val = *bits;
+  for (int i = 0; i < count; i++) {
     if (i % 32 == 0) {
       Serial.print('\t');
     }
     if (i > 0) {
       if (i % 8 == 0) {
+        val = *(++bits);
+        mask = 0x01;
         Serial.print(' ');
       } else if (i % 4 == 0) {
         Serial.print('-');
       }
     }
-    Serial.print(output.isSet(i) ? '1' : '0');
+    Serial.print(val & mask ? '1' : '0');
+    mask = mask << 1;
   }
+}
+
+extern byte activeOutputs[];
+extern byte outputActiveTrigger[];
+
+void outputStatus() {
+  Serial.print(F("Out state:"));
+  printBitField(output.lastOutputState, MAX_OUTPUT);
+  Serial.println();
+  Serial.print(F("Out active:"));
+  printBitField(activeOutputs, MAX_OUTPUT);
+  Serial.println();
+  Serial.print(F("Out prime:"));
+  printBitField(outputActiveTrigger, MAX_OUTPUT);
   Serial.println();
 }
 
@@ -267,7 +286,7 @@ void FlashProcessor::clearOutput(byte index) {
       output.clear(i);
       if (next) {
         byte x = (i == index) ? i + 1 : i;
-        Output::setOutputActive(x, false);
+        setOutputActive(x, false);
         output.clear(i + 1);  
       }
       clear(ptr);
@@ -300,10 +319,10 @@ Processor::R FlashProcessor::processAction2(ExecutionState& state) {
     Serial.println(F("Overflow"));
     return Processor::ignored;
   }
+  clearOutput(oi);
+  setOutputActive(oi, false);
   if (state.invert) {
     // just disable:
-    clearOutput(oi);
-    Output::setOutputActive(oi, false);
     Serial.println(F("Inverted"));
     return Processor::finished;
   }
@@ -357,7 +376,7 @@ Processor::R FlashProcessor::processAction2(ExecutionState& state) {
       if (cfg.nextInvert) {
         output.clear(oi + 1);  
       }
-      Output::setOutputActive(oi, true);
+      setOutputActive(oi, true);
       scheduler.schedule(d, this, (unsigned int)ptr);
 
       return stIndex == 0 ? Processor::finished : Processor::blocked;
@@ -379,7 +398,7 @@ void FlashProcessor::clear(PendingFlash* ptr) {
   if (ptr->nextInvert) {
     output.clear(oi + 1);
   }
-  Output::setOutputActive(oi, false);
+  setOutputActive(oi, false);
   ExecutionState *st = Executor::state(ptr->execState);
   if (st != NULL) {
     Executor::finishAction2(*st);

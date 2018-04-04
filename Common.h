@@ -6,21 +6,61 @@ const int OUTPUT_ON = 1;        // switch the output on
 const int OUTPUT_ON_PULSE = 2;  // pulse the output
 const int OUTPUT_TOGGLE = 3;    // toggle the output on-off
 
-const int newCommandPartMax = 10;
+const int newCommandPartMax = 16;
 
 bool setupActive = false;
 
 char pressedKey;
 
-extern byte state[];
+extern byte keyState[];
 extern char printBuffer[];
 
-bool isKeyPressed(int k) {
-  byte o = k >> 3;
-  return state[o] & (1 << (k & 0x07));
+void bitfieldWrite(byte* bptr, byte bit, boolean state) {
+  bptr += (bit / 8);
+  byte v = (1 << (bit & 0x07));
+  if (state) {
+    *bptr |= v;
+  } else {
+    *bptr &= ~v;
+  }
 }
 
-bool setKeyPressed(int k, boolean s);
+boolean bitfieldRead(byte* bptr, byte bit) {
+  bptr += (bit / 8);
+  byte v = (1 << (bit & 0x07));
+  return ((*bptr) & v) > 0;
+}
+
+// Condition makers
+// input keys
+void primeKeyChange(byte k);
+bool isKeyPressed(byte k);
+char getKeyChange(byte k);
+boolean setKeyPressed(byte k, boolean s);
+
+// TTL outputs
+void primeOutputChange(byte k);
+bool isOutputActive(byte k);
+char getOutputActive(byte k);
+boolean setOutputActive(byte k, boolean s);
+
+// commands
+void primeCommandChange(byte k);
+bool isCommandActive(byte k);
+char getCommandActive(byte k);
+boolean setCommandActive(byte k, boolean s);
+
+// servo motion
+void primeServoActive(byte k);
+bool isServoActive(byte k);
+char getServoActive(byte k);
+boolean setServoActive(byte k, boolean s);
+
+// servo position
+void primeServoPosition(byte k);
+bool isServoPosition(byte k);
+char getServoPosition(byte k);
+boolean setServoPosition(byte k, boolean s);
 
  __attribute__((always_inline)) char* append(char* &ptr, char c) {
   *(ptr++) = c;
@@ -326,6 +366,7 @@ public:
   void clear();
   const Action& skip();
   const Action& next();
+  const Action& prev();
   const Action& a() { return current; };
   const Action* aptr() { return &current; };
   int i() { return !isPersistent() ? (int)ptr : index; };
@@ -456,7 +497,7 @@ struct OutputActionData {
     }
 
     int pulseDelay() {
-      return pulseLen;
+      return pulseLen * 100;
     }
 
     void setDelay(int d) {
@@ -503,6 +544,7 @@ struct WaitActionData {
     timerError
   };
   byte waitType : 3;
+  boolean invert : 1;
   byte : 0; // padding
   union {
     byte  commandNumber : 6;
@@ -522,29 +564,36 @@ struct ControlActionData {
   byte  last    : 1;
   byte  command : 3;
 
-
-  enum ControlType {
+  enum ControlType : byte {
     ctrlCancel  = 0,
     ctrlJumpIf,
     ctrlExec,
-
+    ctrlWait,
+    
     controlError
   };
-  enum ConditionType {
+  enum ConditionType : byte {
+    condNone,
+    condKey,
     condOutput,
     condServo,
-    condCommand
+    condCommand,
+
+    condTop
   };
 
-  ControlType control : 2;
-  ConditionType cond : 3;
-  boolean invert : 1;
-  byte  condIndex : 6;
-  signed char jmpTarget : 5;
+  ControlType control : 3;    // what subcommand
+  ConditionType cond : 3;     // condition type
+  boolean invert : 1;         // inverted condition
+  byte  condIndex : 6;        // condition object number
+  byte  trigger : 1;          // trigger, rather than state
+  byte  cmdKeyPress : 1;       // exec inverse command
+  signed char jmpTarget : 5;  // target of jump, command to cancel
 
-  void cancel(int c) {
+  // 3 bits remain
+  void cancel(byte c) {
     control = ctrlCancel;
-    condIndex = c;
+    jmpTarget = c;
   }
 
   void print(char* s);
@@ -560,13 +609,14 @@ class Processor {
       ignored,
       finished,
       blocked,
+      jumped,
       full
     };
     virtual R processAction2(ExecutionState& state) = 0;
     virtual void tick() {};
     virtual void clear() {}
     virtual boolean cancel(const ExecutionState& ac) = 0;
-    virtual R pending(const Action& ac, void* storage) {
+    virtual R pending(ExecutionState& state) {
       return ignored;
     }
 };
@@ -588,12 +638,9 @@ struct ExecutionState {
     return !blocked && action.isEmpty();
   }
 
-  ExecutionState() : id(0), blocked(false), processor(NULL), invert(false) {}
+  ExecutionState() : id(0xff), blocked(false), processor(NULL), invert(false) {}
   
-  void clear() {
-    blocked = false;
-    action.clear();
-  }
+  void clear();
 };
 static_assert (sizeof(ExecutionState) < 20, "Execution state too large");
 
@@ -633,14 +680,16 @@ class Executor {
     static void addProcessor(Processor*);
     static void process();
 
-    static void clear();
+    static boolean isRunning(byte id);
+
+    static void clear(boolean interactive);
     //void unblockAction(const Action**);
     static void blockAction(int index);
     static void finishAction(const Action* action, int index);
 
     static void playNewAction();
-    static void schedule(const ActionRef&, int id, boolean inverse);
-    static void schedule(const ActionRef&, int id, boolean inverse, boolean wait);
+    static void schedule(const ActionRef&, byte id, boolean inverse);
+    static void schedule(const ActionRef&, byte id, boolean inverse, boolean wait);
 //    void schedulePtr(const Action*, int id);
     static boolean cancelCommand(int id);
 };
@@ -739,11 +788,9 @@ class ServoProcessor : public Processor {
    new value to the daisy chain.
 */
 class Output {
-  private:
+  public:
     static byte  lastOutputState[OUTPUT_BIT_SIZE];
     static byte  newOutputState[OUTPUT_BIT_SIZE];
-    static byte  activeOutputs[OUTPUT_BIT_SIZE];
-  public:
     Output();
 
     static void boot();
@@ -780,8 +827,6 @@ class Output {
     static void  commit();
 
     static void  flush();
-  
-    static void setOutputActive(byte o, boolean state);
 };
 
 
@@ -805,15 +850,15 @@ struct Command {
       cmdOffCancel,    // ON will start the action, OFF will cancel command
     };
 
-    byte    input : 5;        // up to 32 inputs, e.g. 8 * 4
+    byte    input : 6;        // up to 32 inputs, e.g. 8 * 4
     byte    trigger : 3;      // trigger function
     boolean wait:   1;        // wait on action to finish before next one
     byte    actionIndex :  8; // max 255 actions allowed
-    byte    id :    6;
+    byte    id : 6;
 
     // 5 + 3 + 1 + 8 + 6= 8 + 9 + 6 = 17 + 6 = 23 bits
   public:
-    Command() : input(0), actionIndex(noAction), trigger(cmdOff), wait(true) {}
+    Command() : input(0x3f), actionIndex(noAction), trigger(cmdOff), wait(true) {}
     Command(int aI, byte aT, bool aW) : input(aI), actionIndex(noAction), trigger(aT), wait(aW) {}
 
     boolean available() {
@@ -840,6 +885,27 @@ struct Command {
     void print(char* out);
 
 };
+
+int packedTimeToUnits(int packed) {
+  // 0..20 -> n * 50 millis8
+  if (packed <= 20) {
+    return packed;
+  }
+  // 20 = 10 * 50 = 500ms, 21 = 1000ms, up to 10 secs
+  if (packed <= 40) {
+    return (packed - 20) * 10;
+  }
+  // 50 * 20 = 1sec, up to 30sec
+  if (packed <= 60) {
+    return (packed - 40) * 20;
+  }
+  // up to 200sec = 3min 20sec, 5 seconds
+  if (packed <= 120) {
+    return (packed - 60) * 100;
+  }
+  // 10 seconds quantum
+  return (packed - 100) * 200;
+}
 
 static_assert (sizeof(Command) <= 3, "Command too long");
 
@@ -911,5 +977,5 @@ const int eeaddr_flashTable = (eeaddr_commandTable + MAX_COMMANDS * sizeof(Comma
 static_assert (eeaddr_flashTable >= eeaddr_commandTable + 2 + MAX_COMMANDS * sizeof(Command), "EEPROM flash overflow");
 
 const int eeaddr_top = (eeaddr_flashTable + MAX_FLASH * sizeof(FlashConfig)) + 2;
-static_assert (eeaddr_top < 800, "Too large data for EEPROM");
+static_assert (eeaddr_top < 1020, "Too large data for EEPROM");
 

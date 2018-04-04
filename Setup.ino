@@ -35,7 +35,7 @@ const char char_setupAction = '2';
 
 
 void resetState() {
-  executor.clear();
+  executor.clear(false);
   adjustCallback = NULL;
 //  NumberInput::set(NULL);
   processKeyInput = false;

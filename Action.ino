@@ -197,6 +197,22 @@ const Action& ActionRef::skip() {
   return current;
 }
 
+const Action& ActionRef::prev() {
+  if (index == noIndex) {
+    if (!current.isEmpty()) {
+      clear();
+    }
+    return current;    
+  } 
+  if (ptr != NULL) {
+    return current;
+  } else if (index > 0) {
+    index--;
+    current.load(index);
+  }
+  return current;
+}
+
 const Action& ActionRef::next() {
   if (index == noIndex) {
     if (!current.isEmpty()) {

@@ -1,6 +1,8 @@
+
 byte  Output::lastOutputState[OUTPUT_BIT_SIZE];
 byte  Output::newOutputState[OUTPUT_BIT_SIZE];
-byte  Output::activeOutputs[OUTPUT_BIT_SIZE];
+byte activeOutputs[OUTPUT_BIT_SIZE];
+byte outputActiveTrigger[OUTPUT_BIT_SIZE];
 
 static Processor*  Executor::processors[MAX_PROCESSORS];
 
@@ -13,7 +15,45 @@ void bootProcessors() {
   output.boot();
   executor.boot();
   scheduler.boot();
+
+  for (int i = 0; i < sizeof(OUTPUT_BIT_SIZE); i++) {
+    activeOutputs[i] = 0;
+    outputActiveTrigger[i] = 0;
+  }
 }
+
+void primeOutputChange(byte k) {
+  if (k >= OUTPUT_BIT_SIZE) {
+    return;
+  }
+  bitfieldWrite(outputActiveTrigger, k, true);
+}
+
+bool isOutputActive(byte k) {
+  if (k >= OUTPUT_BIT_SIZE) {
+    return false;
+  }
+  return bitfieldRead(activeOutputs, k);
+}
+
+char getOutputActive(byte k) {
+  if (k >= OUTPUT_BIT_SIZE) {
+    return - 1;
+  }
+  if (bitfieldRead(outputActiveTrigger, k)) {
+    return -1;
+  }
+  return bitfieldRead(activeOutputs, k) ? 1 : 0;
+}
+
+boolean setOutputActive(byte k, boolean s) {
+  if (k >= OUTPUT_BIT_SIZE) {
+    return;
+  }
+  bitfieldWrite(outputActiveTrigger, k, false);
+  bitfieldWrite(activeOutputs, k, s);
+}
+
 
 Output::Output() {
   for (byte *os = newOutputState, *los = lastOutputState, *act = activeOutputs; los < (lastOutputState + OUTPUT_BIT_SIZE); os++, los++, act++) {
@@ -32,14 +72,6 @@ void Output::boot() {
   
   flush();
 //  digitalWrite(shiftOutDisable, LOW);
-}
-
-void Output::setOutputActive(byte o, boolean state) {
-  if (state) {
-    activeOutputs[o / 8] |= (1 << (o % 8));
-  } else {
-    activeOutputs[o / 8] &= ~(1 << (o % 8));
-  }
 }
 
 
@@ -119,7 +151,7 @@ Executor::Executor() {
 }
 
 void Executor::boot() {
-  clear();
+  clear(false);
 }
 
 void Executor::addProcessor(Processor* p) {
@@ -129,6 +161,19 @@ void Executor::addProcessor(Processor* p) {
       break;
     }
   }
+}
+
+boolean Executor::isRunning(byte id) {
+  for (int i = 0; i < QUEUE_SIZE; i++) {
+    ExecutionState& q = queue[i];
+    if (q.action.isEmpty()) {
+       continue;
+     }
+     if (q.id == id) {
+      return true;
+     }
+  }
+  return false;
 }
 
 boolean Executor::cancelCommand(int id) {
@@ -148,7 +193,19 @@ boolean Executor::cancelCommand(int id) {
   return false;
 }
 
-void Executor::clear() {
+void ExecutionState::clear() {
+  if (id < MAX_COMMANDS) {
+    if (debugExecutor) {
+      Serial.print("ExClr:"); Serial.println(id);
+    }
+    setCommandActive(id, false);
+  }
+  processor = NULL;
+  blocked = false;
+  action.clear();
+}
+
+void Executor::clear(boolean interactive) {
   if (debugExecutor) {
     Serial.println(F("ExecQ clean")); 
   }
@@ -162,6 +219,9 @@ void Executor::clear() {
     }
   }
   for (int i = 0; i < QUEUE_SIZE; i++) {
+    if (interactive && queue[i].id < MAX_COMMANDS) {
+      continue;
+    }
     queue[i].clear();
   }
 }
@@ -170,11 +230,11 @@ void Executor::handleWait(Action* a) {
   
 }
 
-void Executor::schedule(const ActionRef& ref, int id, boolean invert) {
+void Executor::schedule(const ActionRef& ref, byte id, boolean invert) {
   schedule(ref, id, invert, true);  
 }
 
-void Executor::schedule(const ActionRef& ref, int id, boolean invert, boolean wait) {
+void Executor::schedule(const ActionRef& ref, byte id, boolean invert, boolean wait) {
   if (debugExecutor) {
     Serial.print(F("ExAction: ")); 
     initPrintBuffer();
@@ -189,6 +249,10 @@ void Executor::schedule(const ActionRef& ref, int id, boolean invert, boolean wa
       q.blocked = false;
       q.waitNext = q.wait = wait;
       q.invert = invert;
+
+      if (id < MAX_COMMANDS) {
+        setCommandActive(id, true);
+      }
       if (debugExecutor) {
         Serial.print(F("ExSched: ")); printQ(q); //Serial.print((st - queue)); Serial.print(F(" ")); Serial.println((int)&q.action, HEX);
       }
@@ -230,12 +294,12 @@ void Executor::finishAction2(ExecutionState& q) {
   }
   q.blocked = false;
   q.wait = q.waitNext;
-  if (q.action.isEmpty()) {
-    return;
-  }
   q.action.next();
   if (debugExecutor) {
     Serial.print(F("FinQ: ")); printQ(q); //Serial.print((&q - queue)); Serial.print(F(" NA:")); Serial.println(q.action.i(), HEX);
+  }
+  if (q.action.isEmpty()) {
+    q.clear();
   }
 }
 
@@ -267,7 +331,7 @@ void Executor::process() {
     }
     boolean known = false;
     if (q.processor != NULL) {
-      Processor::R result = q.processor->pending(q.action.a(), &q.data);
+      Processor::R result = q.processor->pending(q);
       if (result == Processor::finished) {
         if (debugExecutor) {
           Serial.print(F("Fin-P#")); printQ(q); //Serial.print(q.action.i(), HEX); Serial.print(F(" C:")); Serial.println(q.action.a().command);
@@ -278,6 +342,10 @@ void Executor::process() {
     }
     if (q.blocked) {
       continue;
+    }
+    if (q.action.isEmpty()) {
+       q.clear();
+       continue;
     }
 
     const Action& a = q.action.a();
@@ -312,6 +380,9 @@ void Executor::process() {
               printQ(q); 
             }
             break;
+          case Processor::jumped:
+            unblock(q);
+            break;
           case Processor::finished:
             // the 'wait' flag is not reset.
             unblock(q);
@@ -332,10 +403,13 @@ void Executor::process() {
       unblock(q);
       q.action.next();
     }
+    if (q.action.isEmpty()) {
+      q.clear();
+    }
   }
 }
 
 void Executor::playNewAction() {
-  schedule(&newCommand[0], 0, false);  
+  schedule(&newCommand[0], 0xff, false);  
 }
 

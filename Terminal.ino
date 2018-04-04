@@ -170,6 +170,7 @@ void processTerminal() {
   }
 }
 
+
 int nextNumber() {
   if ((*inputPos) == 0) {
     return -2;
@@ -243,7 +244,7 @@ void maybeExecuteCommandPart() {
   if (commandDef == -1) {
     executor.playNewAction();
   } else {
-    executor.schedule((&newCommand[0]) + commandDef, 0, false);
+    executor.schedule((&newCommand[0]) + commandDef, 0xff, false);
   }
 }
 
@@ -289,11 +290,15 @@ void commandDefine() {
   }
   commandNo = no;
   int btn = nextNumber();
-  if (btn < 1 || btn > MAX_INPUT_BUTTONS) {
+  if (btn < 0 || btn > MAX_INPUT_BUTTONS) {
     Serial.println(F("\nBad button"));
     return;
   }
-  btn--;
+  if (btn == 0) {
+    btn = 0x3f;
+  } else {
+    btn--;
+  }
   byte trigger = Command::cmdOn;
   const char ch = *inputPos;
   switch (ch) {
