@@ -39,7 +39,7 @@ Tlačítka se čtou po sloupcích, v případě přepinačů je nutné zařadit 
 4. Upgrade obslužného SW - pomocí Arduino IDE
 
 
-Podrobnosti viz [Wiki](wiki/)
+Podrobnosti viz [Wiki](https://github.com/svatoun/analog-servopoint/wiki/)
 
 
 
