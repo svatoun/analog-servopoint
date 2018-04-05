@@ -145,7 +145,7 @@ struct ServoConfig {
   // the default is chosen so that it positions the servo at neutral position. 0 would mean to position at
   // one of the edge positions, which is not usually good for servos already built into a structure.
   ServoConfig() : pwmFirst((90 / servoPwmStep)), pwmSecond((90 / servoPwmStep)), servoSpeed(0), statusOutput(noOutput) {}
-  ServoConfig(int pwmL, int pwmR, int speed, int output) : servoSpeed(speed), statusOutput(output < 0 ? noOutput : output) {
+  ServoConfig(byte pwmL, byte pwmR, byte speed, char output) : servoSpeed(speed), statusOutput(output < 0 ? noOutput : output) {
     setLeft(pwmL);
     setRight(pwmR);
   }
@@ -154,12 +154,12 @@ struct ServoConfig {
     return (pwmFirst == (90 / servoPwmStep)) && (pwmSecond == (90 / servoPwmStep)) && (servoSpeed == 0);
   }
 
-  int output() {
+  char output() {
     byte o = statusOutput;
     return o == noOutput ? - 1 : o;
   }
 
-  void setOutput(int o) {
+  void setOutput(char o) {
     if (o < 0 || o >= MAX_OUTPUT) {
       statusOutput = noOutput;
     } else {
@@ -167,41 +167,39 @@ struct ServoConfig {
     }
   }
 
-  void setLeft(int l) {
-    if (l < 0 || l > 180) {
+  void setLeft(byte l) {
+    if (l > 180) {
       return;
     }
     pwmFirst = (l / servoPwmStep);
   }
-  void setRight(int r) {
-    if (r < 0 || r > 180) {
+  void setRight(byte r) {
+    if (r > 180) {
       return;
     }
     pwmSecond = (r / servoPwmStep);
   }
-  void setSpeed(int s) {
-    if (s < 0) {
-      s = 0;
-    } else if (s >= 8) {
+  void setSpeed(byte s) {
+    if (s >= 8) {
       s = 7;
     }
     servoSpeed = s;
   }
 
-  int speed() {
+  byte speed() {
     return servoSpeed;
   }
-  int left() {
+  byte left() {
     return pwmFirst * servoPwmStep;
   }
-  int right() {
+  byte right() {
     return pwmSecond * servoPwmStep;
   }
-  int pos(bool dir) {
+  byte pos(bool dir) {
     return dir ? left() : right();
   }
 
-  static int change(int orig, int steps) {
+  static byte change(byte orig, char steps) {
     int x = orig + steps * servoPwmStep;
     if (x < 0) {
       return 0;
@@ -211,7 +209,7 @@ struct ServoConfig {
     return x;
   }
 
-  static int value(int set) {
+  static byte value(byte set) {
     return (set / servoPwmStep) * servoPwmStep;
   }
 
@@ -221,12 +219,12 @@ struct ServoConfig {
     statusOutput = noOutput;
   }
 
-  void print(int id, char* out);
+  void print(byte id, char* out);
 
   // load data from EEPROM
-  void load(int idx);
+  void load(byte idx);
   // save into EEPROM
-  void save(int idx);
+  void save(byte idx);
 };
 
 struct FlashConfig {
@@ -240,15 +238,15 @@ struct FlashConfig {
     return onDelay == 0;
   }
 
-  void save(int index);
-  void load(int index);
+  void save(byte index);
+  void load(byte index);
 
-  void print(char* out, int index);
+  void print(char* out, byte index);
 };
 
 extern ServoConfig  setupServoConfig;
 extern FlashConfig  flashConfig[];
-extern int setupServoIndex;
+extern char setupServoIndex;
 
 typedef void (*ActionRenumberFunc)(int, int);
 
@@ -270,7 +268,7 @@ struct Action {
 //    static Action actionTable[MAX_ACTIONS];
     static ActionRenumberFunc renumberCallbacks[];
     static dumper_t dumpers[];
-    static int  top;
+    static byte  top;
   public:
     Action();
 
@@ -279,7 +277,7 @@ struct Action {
     static void initialize();
     static void renumberCallback(ActionRenumberFunc f);
 
-    static Action& get(int index, Action& target);
+    static Action& get(byte index, Action& target);
     static ActionRef getRef(byte index);
 
     //static boolean isPersistent(const Action* a) { return (a > actionTable) && (a < (actionTable + MAX_ACTIONS)); }
@@ -309,9 +307,9 @@ struct Action {
       last = 0;
     }
 
-    static int copy(const Action* a, int);
+    static int copy(const Action* a, byte);
 
-    static int findSpace(int size);
+    static int findSpace(byte size);
 
     template<typename X> X& asActionData() {
       return (X&)(*this);
@@ -330,8 +328,8 @@ struct Action {
       return (ControlActionData&)(*this);
     }
 
-    void save(int idx);
-    void load(int idx);
+    void save(byte idx);
+    void load(byte idx);
 
     void print(char* out);
 };
@@ -376,7 +374,7 @@ public:
   void free();
   void save();
 
-  void saveTo(int index);
+  void saveTo(byte index);
 
   void makeLast() { 
     current.makeLast(); 
@@ -399,19 +397,19 @@ struct ServoActionData {
   byte  servoIndex : 4;     // up to 32 servos
   byte  targetPos  : 6;     // 0..180, in 3deg increments
 
-  void moveLeft(int s) {
+  void moveLeft(byte s) {
     command = servo;
     servoIndex = s;
     setTargetPosition(true);
   }
 
-  void moveRight(int s) {
+  void moveRight(byte s) {
     command = servo;
     servoIndex = s;
     setTargetPosition(false);
   }
 
-  void move(int s, int angle) {
+  void move(byte s, byte angle) {
     command = servo;
     servoIndex = s;
     setTargetPosition(angle);
@@ -425,7 +423,7 @@ struct ServoActionData {
     return targetPos == servoPredefinedLeft;
   }
 
-  int targetPosition() {
+  byte targetPosition() {
     return (targetPos - servoCustomStart) * 3;
   }
 
@@ -434,7 +432,7 @@ struct ServoActionData {
     targetPos = left ? servoPredefinedLeft : servoPredefinedRight;
   }
 
-  void setTargetPosition(int degs) {
+  void setTargetPosition(byte degs) {
     targetPos = (degs / 3) + servoCustomStart;
   }
 
@@ -463,32 +461,32 @@ struct OutputActionData {
     
     // 3 bits remain
   public:
-    void  turnOn(int output) {
+    void  turnOn(byte output) {
       command = onOff;
       fn = outOn;
       outputIndex = output;
     }
 
-    void turnOff(int output) {
+    void turnOff(byte output) {
       command = onOff;
       fn = outOff;
       outputIndex = output;
     }
 
-    void toggle(int output) {
+    void toggle(byte output) {
       command = onOff;
       fn = outToggle;
       outputIndex = output;
     }
 
-    void pulse(int output) {
+    void pulse(byte output) {
       command = onOff;
       fn = outPulse;
       outputIndex = output;
       pulseLen = 0;
     }
 
-    void flash(int out, int fl, boolean inv) {
+    void flash(byte out, byte fl, boolean inv) {
       command = onOff;
       fn = outFlash;
       outputIndex = out;
@@ -500,13 +498,13 @@ struct OutputActionData {
       return pulseLen * 100;
     }
 
-    void setDelay(int d) {
+    void setDelay(byte d) {
       pulseLen = d;
     }
 
     boolean isOn();
 
-    int output() {
+    byte output() {
       return outputIndex;
     }
 
@@ -653,7 +651,7 @@ class Executor {
     static ExecutionState queue[QUEUE_SIZE];
 
     void handleWait(Action* action);
-    static bool isBlocked(int index);
+    static bool isBlocked(byte index);
 
     static void printQ(const ExecutionState& q);
   public:
@@ -684,14 +682,14 @@ class Executor {
 
     static void clear(boolean interactive);
     //void unblockAction(const Action**);
-    static void blockAction(int index);
-    static void finishAction(const Action* action, int index);
+    static void blockAction(byte index);
+    static void finishAction(const Action* action, byte index);
 
     static void playNewAction();
     static void schedule(const ActionRef&, byte id, boolean inverse);
     static void schedule(const ActionRef&, byte id, boolean inverse, boolean wait);
 //    void schedulePtr(const Action*, int id);
-    static boolean cancelCommand(int id);
+    static boolean cancelCommand(byte id);
 };
 
 class ScheduledProcessor {
@@ -758,7 +756,7 @@ class ServoProcessor : public Processor {
     unsigned long servoMask;
 
     void moveFinished();
-    void setupSelector(int servo);
+    void setupSelector(byte servo);
   public:
     ServoProcessor();
 
@@ -767,7 +765,7 @@ class ServoProcessor : public Processor {
     /**
        Attaches the processor to a particular pin. Must be called during setup().
     */
-    void attach(int pin, unsigned long servoMask);
+    void attach(byte pin, unsigned long servoMask);
     void linkWith(ServoProcessor* link);
 
     void start(const Action& action, Action** increment); // setup data from the action
@@ -779,7 +777,7 @@ class ServoProcessor : public Processor {
     boolean available() {
       return servoIndex == noservo;
     }
-    boolean isCompatibleWith(int servoIndex);
+    boolean isCompatibleWith(byte servoIndex);
 };
 
 /**
@@ -798,14 +796,14 @@ class Output {
     /**
        Sets the corresponding bit up
     */
-    static void  set(int outputIndex);
+    static void  set(byte outputIndex);
 
     /**
        Clears the appropriate bit
     */
-    static void  clear(int outputIndex);
+    static void  clear(byte outputIndex);
 
-    static void  setBit(int outputIndex, boolean value) {
+    static void  setBit(byte outputIndex, boolean value) {
       if (value) { set(outputIndex); } else { clear(outputIndex); }
     }
 
@@ -817,9 +815,9 @@ class Output {
     /**
        Determines if an output is set.
     */
-    static bool  isSet(int index);
+    static bool  isSet(byte index);
 
-    static bool  isActive(int index);
+    static bool  isActive(byte index);
 
     /**
        Commits pending changes.
@@ -859,7 +857,7 @@ struct Command {
     // 5 + 3 + 1 + 8 + 6= 8 + 9 + 6 = 17 + 6 = 23 bits
   public:
     Command() : input(0x3f), actionIndex(noAction), trigger(cmdOff), wait(true) {}
-    Command(int aI, byte aT, bool aW) : input(aI), actionIndex(noAction), trigger(aT), wait(aW) {}
+    Command(byte aI, byte aT, bool aW) : input(aI), actionIndex(noAction), trigger(aT), wait(aW) {}
 
     boolean available() {
       return actionIndex > MAX_ACTIONS;
@@ -871,12 +869,12 @@ struct Command {
 
     void free();
 
-    boolean matches(int i, byte t) {
+    boolean matches(byte i, byte t) {
       return input == i && trigger == t;
     }
 
-    static const Command* find(int input, boolean state, const Command* from);
-    static bool processAll(int input, boolean state);
+    static const Command* find(byte input, boolean state, const Command* from);
+    static bool processAll(byte input, boolean state);
 
     void execute(boolean keyPressed);
 
