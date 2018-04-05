@@ -190,7 +190,7 @@ void Command::execute(boolean keyPressed) {
   executor.schedule(aref, id, i, w);
 }
 
-bool Command::processAll(int input, boolean state) {
+bool Command::processAll(byte input, boolean state) {
   bool found = false;
   const Command* last = NULL;
   while (true) {
@@ -230,7 +230,7 @@ int Command::findFree() {
   return -1;
 }
 
-const Command* Command::find(int input, boolean state, const Command* from) {
+const Command* Command::find(byte input, boolean state, const Command* from) {
   if (from == NULL) {
     from = commands;
   } else {

@@ -76,14 +76,14 @@ void Output::boot() {
 
 
 
-void Output::set(int index) {
+void Output::set(byte index) {
   if (debugOutput) {
     Serial.print(F("Set output: ")); Serial.println(index);
   }
   newOutputState[index / 8] |= 1 << (index % 8);
 }
 
-void Output::clear(int index) {
+void Output::clear(byte index) {
   if (debugOutput) {
     Serial.print(F("Clear output: ")); Serial.println(index);
   }
@@ -132,11 +132,11 @@ void Output::commit() {
   flush();
 }
 
-bool Output::isSet(int index) {
+bool Output::isSet(byte index) {
   return lastOutputState[index / 8] & (1 << (index % 8));
 }
 
-boolean Output::isActive(int index) {
+boolean Output::isActive(byte index) {
   return activeOutputs[index / 8] & (1 << (index % 8));
 }
 //
@@ -176,7 +176,7 @@ boolean Executor::isRunning(byte id) {
   return false;
 }
 
-boolean Executor::cancelCommand(int id) {
+boolean Executor::cancelCommand(byte id) {
   for (int i = 0; i < QUEUE_SIZE; i++) {
     ExecutionState& q = queue[i];
     if (q.action.isEmpty()) {
@@ -261,12 +261,12 @@ void Executor::schedule(const ActionRef& ref, byte id, boolean invert, boolean w
   }
 }
 
-bool Executor::isBlocked(int index) {
-  return (index < 0) || (index >= QUEUE_SIZE) || queue[index].blocked;
+bool Executor::isBlocked(byte index) {
+  return (index >= QUEUE_SIZE) || queue[index].blocked;
 }
 
-void Executor::finishAction(const Action* action, int index) {
-  if (index < 0 || index >= QUEUE_SIZE) {
+void Executor::finishAction(const Action* action, byte index) {
+  if (index >= QUEUE_SIZE) {
     return;
   }
   finishAction2(queue[index]);

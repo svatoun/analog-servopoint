@@ -56,7 +56,7 @@ boolean setServoActive(byte k, boolean s) {
 }
 
 
-void ServoConfig::print(int id, char* out) {
+void ServoConfig::print(byte id, char* out) {
   strcat_P(out, PSTR("RNG:"));
   out += strlen(out);
   out = printNumber(out, id, 10);
@@ -213,11 +213,11 @@ void servoEepromLoad() {
   eeBlockRead('P', eeaddr_servoPositions, &servoPositions[0], sizeof(servoPositions));
 }
 
-void ServoConfig::load(int idx) {
+void ServoConfig::load(byte idx) {
   EEPROM.get(eeaddr_servoConfig + idx * sizeof(ServoConfig), *this);
 }
 
-void ServoConfig::save(int idx) {
+void ServoConfig::save(byte idx) {
   EEPROM.put(eeaddr_servoConfig + idx * sizeof(ServoConfig), *this);
 }
 
@@ -326,7 +326,7 @@ ServoProcessor::ServoProcessor() : servoIndex(noservo), blockedState(NULL), serv
 {
 }
 
-void ServoProcessor::attach(int pin, unsigned long mask) {
+void ServoProcessor::attach(byte pin, unsigned long mask) {
   pwmPin = pin;
   servoMask = mask;
 }
@@ -405,7 +405,7 @@ void ServoProcessor::moveFinished() {
   clear();
 }
 
-boolean ServoProcessor::isCompatibleWith(int otherIndex) {
+boolean ServoProcessor::isCompatibleWith(byte otherIndex) {
   if (available()) {
     return true;
   }
@@ -509,7 +509,7 @@ Processor::R ServoProcessor::processAction2(ExecutionState& state) {
   }
 }
 
-void ServoProcessor::setupSelector(int index) {
+void ServoProcessor::setupSelector(byte index) {
   // 2 servos / selector value for 4052
   index = index >> 1;
   digitalWrite(servoSelectA, (index & 0b01) ? HIGH : LOW);

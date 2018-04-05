@@ -3,7 +3,7 @@
 ActionRenumberFunc Action::renumberCallbacks[5];
 dumper_t Action::dumpers[] = { NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL };
 
-int Action::top = 0;
+byte Action::top = 0;
 
 Action::Action() {
   last = true;
@@ -27,8 +27,8 @@ void Action::print(char* out) {
   }
 }
 
-Action& Action::get(int index, Action& target) {
-  if (index < 0 || index >= MAX_ACTIONS) {
+Action& Action::get(byte index, Action& target) {
+  if (index >= MAX_ACTIONS) {
     target = noAction;
     return target;
   }
@@ -63,7 +63,7 @@ void Action::renumberCallback(ActionRenumberFunc f) {
 #endif
 }
 
-int Action::copy(const Action* from, int s) {
+int Action::copy(const Action* from, byte s) {
   if (s == 0) {
     return -1;
   }
@@ -86,7 +86,7 @@ int Action::copy(const Action* from, int s) {
   return p;
 }
 
-int Action::findSpace(int size) {
+int Action::findSpace(byte size) {
   int index;
   int head = -1;
   for (index = 0; index < MAX_ACTIONS; index++) {
@@ -271,7 +271,7 @@ void ActionRef::save() {
   current.save(index);
 }
 
-void ActionRef::saveTo(int pos) {
+void ActionRef::saveTo(byte pos) {
   if (pos >= MAX_ACTIONS) {
     return;
   }
@@ -291,12 +291,12 @@ void ActionRef::print(char* out) {
   a().print(out);
 }
 
-void Action::load(int index) {
+void Action::load(byte index) {
   int eeaddr = eeaddr_actionTable + 1 + index * sizeof(Action);
   EEPROM.get(eeaddr, *this);
 }
 
-void Action::save(int index) {
+void Action::save(byte index) {
   int eeaddr = eeaddr_actionTable + 1 + index * sizeof(Action);
   EEPROM.put(eeaddr, *this);
 }

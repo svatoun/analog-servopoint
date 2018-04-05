@@ -17,7 +17,7 @@ boolean shown;
 boolean wasCancel;
 byte digitCount;
 
-int setupServoIndex = -1;
+char setupServoIndex = -1;
 
 
 #ifdef NUMBERINPUT

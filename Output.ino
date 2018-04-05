@@ -508,15 +508,15 @@ void dumpFlashConfig() {
   }
 }
 
-void FlashConfig::save(int idx) {
+void FlashConfig::save(byte idx) {
   EEPROM.put(eeaddr_flashTable + idx * sizeof(FlashConfig), *this);
 }
 
-void FlashConfig::load(int idx) {
+void FlashConfig::load(byte idx) {
   EEPROM.get(eeaddr_flashTable + idx * sizeof(FlashConfig), *this);
 }
 
-void FlashConfig::print(char *out, int index) {
+void FlashConfig::print(char *out, byte index) {
   strcat_P(out, PSTR("FLS:"));
   out += strlen(out);
   out = printNumber(out, index, 10);
