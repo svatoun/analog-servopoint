@@ -173,7 +173,7 @@ void printOutputAction(const Action& ac, char* out) {
 void outputCommand() {
   int n = nextNumber() - 1;
   if (n < 0 || n >= MAX_OUTPUT) {
-    Serial.print(F("Bad output number"));
+    Serial.println(F("Bad output number"));
     return;
   }
   Action action;

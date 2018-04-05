@@ -131,6 +131,17 @@ void processLineCommand() {
   Serial.println(F("\nBad command"));
 }
 
+void printPrompt() {
+  if (!interactive) {
+    return;
+  }
+  if (commandDef < 0) {
+    Serial.print("@ > ");
+  } else {
+    Serial.print((int)(commandDef + 1)); Serial.print(":> ");
+  }
+}
+
 
 void processTerminal() {
   while (Serial.available()) {
@@ -158,6 +169,7 @@ void processTerminal() {
       Serial.write("\r\n");
       processLineCommand();
       clearInputLine();
+      printPrompt();
       continue;
     }
     Serial.write(c);
@@ -223,7 +235,7 @@ void commandBack() {
   }
   commandDef--;
   newCommand[commandDef - 1].makeLast();
-  Serial.print(F("\n")); Serial.print(commandDef + 1, DEC); Serial.println(F(":>>"));
+  Serial.print(F("\n"));
 }
 
 void commandCancel() {
@@ -337,14 +349,11 @@ void commandDefine() {
   definedCommand.print(printBuffer);
   Serial.println(printBuffer);
   commandDef = 0;
-  if (interactive) {
-    Serial.println(); Serial.print(commandDef + 1); Serial.println(F(":>"));
-  }
 }
 
 void commandFinish() {
   if (commandDef < 0) {
-    Serial.print(F("Empty command"));
+    Serial.println(F("Empty command"));
     resetTerminal();
     return;
   }

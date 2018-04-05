@@ -208,9 +208,9 @@ void setup() {
   Serial.print(F("Size of executors: ")); Serial.println(sizeof(Executor) + sizeof(ServoProcessor));
   Serial.print(F("Size of actions: ")); Serial.println(sizeof(Action) * MAX_ACTIONS);
 
-  setupTerminal();
-
   registerLineCommand("SAV", &saveHandler);
+
+  printPrompt();
 }
 
 /**
