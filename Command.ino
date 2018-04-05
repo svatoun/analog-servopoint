@@ -95,7 +95,7 @@ void displayCommandStatus() {
       }
     }
   }  
-  Serial.print(F("Commands: ")); Serial.println(cmdCount);
+  Serial.print(F("\nCommands: ")); Serial.println(cmdCount);
   Serial.print(F("Cmd act :")); printBitField(activeCommands, MAX_COMMANDS);
   Serial.print(F("\nCmd prim:")); printBitField(activeCommandsTrigger, MAX_COMMANDS);
   Serial.println();
