@@ -453,7 +453,7 @@ enum PlayMode {
     playEnd
 };
 
-byte playMode;
+byte playMode = playServo;
 
 void commandPlay() {
   playMode = playServo;
@@ -469,15 +469,15 @@ void playCharacterCallback(char c) {
   switch (c) {
     case '1':
       Serial.println(F("\nServo mode"));
-      playMode = servo;
+      playMode = playServo;
       return;
     case '2':
       Serial.println(F("\nOutput mode"));
-      playMode = servo;
+      playMode = playOutput;
       return;
     case '3':
       Serial.println(F("\nCommand mode"));
-      playMode = servo;
+      playMode = playCommand;
       return;
     case '\r':
     case ' ':
@@ -489,7 +489,7 @@ void playCharacterCallback(char c) {
   if (c >= 'A' && c <= 'Z') {
     int n = c - 'A';
     Action a;
-    Serial.print('\b');
+//    Serial.print('\b');
     switch (playMode) {
       case playServo: {
         if (n >= MAX_SERVO) {
