@@ -955,9 +955,10 @@ struct ModuleChain {
 
 boolean processKeyInput = false;
 
-const int CURRENT_DATA_VERSION = 0x05;
+const int CURRENT_DATA_VERSION = 0x06;
 
 const int eeaddr_version = 0x00;
+const int eeaddr_xbusConfig = 0x01;
 const int eeaddr_servoConfig = 0x02;
 
  // servo positions, min 16 servos
@@ -976,4 +977,5 @@ static_assert (eeaddr_flashTable >= eeaddr_commandTable + 2 + MAX_COMMANDS * siz
 
 const int eeaddr_top = (eeaddr_flashTable + MAX_FLASH * sizeof(FlashConfig)) + 2;
 static_assert (eeaddr_top < 1020, "Too large data for EEPROM");
+
 

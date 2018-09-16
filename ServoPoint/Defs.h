@@ -3,6 +3,12 @@
 
 #define SERVOS
 
+/**
+ * Velikost prijmoveho bufferu v byte. Musi byt delsi nez nejdelsi zpracovavany packet.
+ * Delsi packety se ani nezaznamenavaji a zahazuji rovnou.
+ */
+const int recvBufferSize = 11;
+
 const int ROWS = 4;
 const int COLS = 4;
 
@@ -12,6 +18,10 @@ const int COLS = 4;
  * and status
  */
 const int LED_ACK = 13;
+
+const int rs485Receive = 2;
+const int rs485Send = 4;
+const int rs485Direction = 3;
 
 const int latchPin  = A0;
 const int clockPin  = A1;
@@ -36,13 +46,6 @@ const int servoPowerA = A2;
 const int servoPowerB = 5;
 const int servoPowerC = A3;
 const int servoPowerD = 12;
-
-/**
- * Configuration for the keypad / control buttons. Buttons are sequentially numbered to generate orinals - indexes into the command table.
- */
-const byte rowPins[ROWS] = { A4, A5, A6, A7 };
-const byte colPins[COLS] = { 2, 3, 4, A1 };
-
 
 #define SHIFTPWM_PHYSICAL_PINS
 #define PORT_LATCH  PC
@@ -122,16 +125,6 @@ const int debugConditions = 0;
  */
 const int numberOfLatches   = 1;
 static_assert (numberOfLatches <= OUTPUT_BIT_SIZE, "Invalid number of latches");
-
-// FIXME: no translation necessary.
-char keys[ROWS][COLS]  = { { 1, 2, 3, 4, }, { 5, 6, 7, 8, }, { 9, 10, 11, 12, }, { 13, 14, 15, 16, }, };
-
-const char keyTranslation[] = { 0, '1', '2', '3', '+', 
-                                 '4', '5', '6', '-', 
-                                 '7', '8', '9', 'E', 
-                                 '*', '0', '#', '.', 
-                                 'J', 'K', 'L', 'M', 
-};
 
 #endif
 

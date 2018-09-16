@@ -147,7 +147,6 @@ void setupLoop() {
 #endif
     return;
   }
-  currentKey = keyTranslation[pressedKey];
   setupHandleKey();
 }
 

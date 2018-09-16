@@ -1,11 +1,15 @@
+#ifdef NEO
+#include <NeoSWSerial.h>
+#else
+#include <SoftwareSerial.h>
+#endif
 
+#include "RS485Frame.h"
 #undef SOFTWARE_SERVO
 
 #define DEBUG
 
 #include <EEPROM.h>
-#include "Key2.h"
-#include "Keypad2.h"
 
 #ifdef SOFTWARE_SERVO
 #include <SoftwareServo.h>
@@ -30,7 +34,6 @@ char printBuffer[50];
 */
 Action  newCommand[newCommandPartMax];
 
-AnalogKeypad keypad(makeKeymap(keys), rowPins, colPins, ROWS, COLS);
 
 //ModuleChain *modules;
 
@@ -44,13 +47,14 @@ Executor executor;
 
 char currentKey;
 uint8_t * heapptr, * stackptr;
-
+/*
 void check_mem() {
   stackptr = (uint8_t *)malloc(4);          // use stackptr temporarily
   heapptr = stackptr;                     // save value of heap pointer
   free(stackptr);      // free up the memory again (sets stackptr to 0)
   stackptr =  (uint8_t *)(SP);           // save value of stack pointer
 }
+*/
 
 int freeRam ()
 {
@@ -60,7 +64,7 @@ int freeRam ()
 }
 
 void clearNewCommand() {
-  check_mem();
+//  check_mem();
   if (debugControl) {
     Serial.println(F("Clearing new command"));
   }
@@ -163,11 +167,8 @@ void handleAckLed() {
 //////////////////////////////////////////////////////////////////////////
 
 void initializeHW() {
-  keypad.digitalPins(A5);
-  keypad.setDebounceTime(200);
-  
-  //  Serial.begin(115200);
-  Serial.begin(57600);
+    Serial.begin(115200);
+//  Serial.begin(57600);
   // put your setup code here, to run once:
   pinMode(LED_ACK, OUTPUT);
   digitalWrite(LED_ACK, LOW);
@@ -200,8 +201,6 @@ void setup() {
   }
 
   // initial load of key / switch positions
-  keypad.getKeys();
-  keypad.addChangeListener(&processKeyCallback);
 //  enterSetup();
 
   Serial.print(F("Size of commands: ")); Serial.println(sizeof(commands));
@@ -312,7 +311,7 @@ void processKey(int k, boolean pressed) {
   Command::processAll(k, pressed);
 }
 
-
+/*
 void processKeyCallback(const Key2& k, char c) {
     if (setupActive) {
       return;
@@ -334,10 +333,12 @@ void processKeyCallback(const Key2& k, char c) {
     }
     processKey(ch - 1, pressed);
 }
+*/
 
 void loop() {
   currentMillis = millis();
-  pressedKey = keypad.getKey();
+  // pressedKey = keypad.getKey();
+
   if (setupActive) {
     setupLoop();
   }
@@ -347,6 +348,7 @@ void loop() {
   ModuleChain::invokeAll(ModuleCmd::periodic);
   // explicit, at the end
   output.commit();
+  processReceivedCommand();
 }
 
 
