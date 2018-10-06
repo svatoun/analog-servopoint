@@ -25,7 +25,7 @@ void busSlaveModuleHandler(ModuleCmd cmd) {
   switch (cmd) {
     case initialize:
       setupRS485Ports();
-      loadBusSlaveEEPROM();
+      initBusSlave();
       break;
     case eepromLoad:
       loadBusSlaveEEPROM();
@@ -37,11 +37,17 @@ void busSlaveModuleHandler(ModuleCmd cmd) {
       Serial.print(F("XBus address: ")); Serial.println(ownXbusAddr);
       break;
     case dump:
+      dumpXbusAddress();
       break;
     case reset:
       ownXbusAddr = 2;
       break;
   }
+}
+
+void initBusSlave() {
+  loadBusSlaveEEPROM();
+  registerLineCommand("XDR", &commandXbusAddress);
 }
 
 void loadBusSlaveEEPROM() {
@@ -53,12 +59,17 @@ void loadBusSlaveEEPROM() {
 }
 
 void saveBusSlaveEEPROM() {
-  Serial.print(F("XBus address saved: ")); Serial.println(ownXbusAddr);
+//  Serial.print(F("XBus address saved: ")); Serial.println(ownXbusAddr);
   EEPROM.write(eeaddr_xbusConfig, ownXbusAddr);
 }
 
+const int blinkTiny[] = { 50, 50, 0 };   // blink once, short
+
+long recvMillis = 0;
+
 void onReceivedMessage(const CommFrame& frame) {
   if (frame.to != ownXbusAddr) {
+    makeLedAck(&blinkTiny[0]);
     return;
   }
   const RemoteCommand& rc =  *(const RemoteCommand*)(&frame.dataStart);
@@ -72,6 +83,7 @@ void onReceivedMessage(const CommFrame& frame) {
   ackFrame.to = frame.from;
   ackFrame.len = 1;
   ackFrame.dataStart = recvChecksum;
+  recvMillis = millis();
 }
 
 void processReceivedCommand() {
@@ -80,18 +92,58 @@ void processReceivedCommand() {
     periodicReceiveCheck();
     return;
   }
-  
+
+  if (recvMillis > 0 && currentMillis < recvMillis + 5) {
+    return;
+  }
+
+  recvMillis = 0;
+
+/*
+  if (!transmitSingle(false)) {
+    return;
+  }
+*/
+
   byte c = command;
   boolean o = commandOn;
+
+  makeLedAck(&blinkLong[0]);
 
   // musi se ihned odeslat odpoved
   transmitFrame(&ackFrame);
   while (!transmitSingle(false));
-  
+
   // odted je mozne prijmout dalsi command
   command = -1;
 
   // Konecne zpracujeme prijatou "klavesu"
-  processKey(c, o);
+  Serial.print(F("ProcessKey: ")); Serial.print(c); Serial.print('-'); Serial.println(o);
+
+  boolean state = isKeyPressed(c);
+  boolean now = o != 0;
+  if (state != now) {
+    processKey(c, o);
+  }
+}
+
+void dumpXbusAddress() {
+  Serial.print(F("XDR:")); Serial.println(ownXbusAddr);
+}
+void commandXbusAddress() {
+  int a = nextNumber();
+  if (a == -2) {
+    dumpXbusAddress();
+    return;
+  }
+  if (a == 1) {
+    Serial.println(F("Address 1 is reserved."));
+    return;
+  }
+  if (a < 2) {
+    Serial.println(F("Bad addr"));
+    return;
+  }
+  ownXbusAddr = a;
 }
 

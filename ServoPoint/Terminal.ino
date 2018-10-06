@@ -363,7 +363,7 @@ void commandFinish() {
     if (idx < 0) {
       Serial.println(F("Error"));
     } else {
-      Serial.print(F("Defined command #")); Serial.println(idx);
+      Serial.print(F("Defined command #")); Serial.println(idx + 1);
       Serial.print(F("Free RAM: ")); Serial.println(freeRam());
     }
   }

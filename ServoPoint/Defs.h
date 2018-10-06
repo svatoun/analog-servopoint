@@ -12,6 +12,8 @@ const int recvBufferSize = 11;
 const int ROWS = 4;
 const int COLS = 4;
 
+#define COPYRIGHT F("ServoPoint v2.0/Xbus, Copyright(c) 2018, Belgarat@klfree.net")
+
 //------------------------------- PIN ASSIGNMENT ------------------------------------
 /**
  * ACK LED, will blink in response to setup keypresses

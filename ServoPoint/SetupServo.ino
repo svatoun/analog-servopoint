@@ -222,7 +222,7 @@ void rangeCommand() {
   tmpConfig.setSpeed(spd);
   
   initPrintBuffer();
-  tmpConfig.print(index, printBuffer);
+  tmpConfig.print(index + 1, printBuffer);
   Serial.println(printBuffer);
   tmpConfig.save(index);
   Serial.println(F("\nOK"));

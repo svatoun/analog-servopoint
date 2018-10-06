@@ -173,6 +173,8 @@ void initializeHW() {
   pinMode(LED_ACK, OUTPUT);
   digitalWrite(LED_ACK, LOW);
   analogReference(DEFAULT);
+
+  Serial.println(COPYRIGHT);
 }
 
 void checkInitEEPROM() {
